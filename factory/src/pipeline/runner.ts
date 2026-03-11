@@ -250,7 +250,7 @@ export async function tick(deps: RunnerDeps): Promise<void> {
   const ctx = makeCtx(deps);
 
   // Build the registry (uses default stations)
-  const registry = StationRegistry.createDefault(ctx.config);
+  const registry = await StationRegistry.createDefault(ctx.config);
 
   let added = 0;
 

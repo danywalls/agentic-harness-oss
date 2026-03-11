@@ -89,16 +89,18 @@ export class KeyManagerImpl implements KeyManager {
     const keyType = apiKey.startsWith('sk-ant-oat') ? 'OAuth' : 'API key';
     this.log(`🔑 Validating ${keyType} (${apiKey.slice(0, 20)}...)`);
     return new Promise((resolve) => {
+      const isRoot = process.getuid?.() === 0;
+      const args = [
+        '-p',
+        '--model',
+        'claude-haiku-4-5',
+        '--output-format',
+        'json',
+        ...(isRoot ? [] : ['--dangerously-skip-permissions']),
+      ];
       const child = spawnProcess(
         this.claudeBin,
-        [
-          '-p',
-          '--model',
-          'claude-haiku-4-5',
-          '--output-format',
-          'json',
-          '--dangerously-skip-permissions',
-        ],
+        args,
         { env: this.buildAgentEnv(apiKey), stdio: ['pipe', 'pipe', 'pipe'] },
       );
       let out = '';

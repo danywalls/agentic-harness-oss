@@ -15,6 +15,7 @@ import { BaseStation, type FactoryContext, type ShouldProcessResult } from '../b
 import { hasDesignComment } from '../../github/issues.js';
 import { isSpecApproved } from '../../notify/supabase.js';
 import { extractBuildRepo } from '../../github/issues.js';
+import { guardAutoAdvance } from '../../pipeline/reconciler.js';
 
 export class DesignStation extends BaseStation {
   readonly id = 'design';
@@ -43,8 +44,13 @@ export class DesignStation extends BaseStation {
     }
 
     // 4. Skip if design comment already posted (DESIGN already ran)
+    //    Layer 2: Auto-advance the label instead of just skipping
     if (hasDesignComment(issue.number, ctx.env.repo)) {
-      return { process: false, reason: 'DESIGN.md already posted — waiting for BUILD to pick up' };
+      const reason = guardAutoAdvance(
+        issue.number, ctx.env.repo, this.label, this.nextLabel, ctx.log,
+        'DESIGN.md already posted',
+      );
+      return { process: false, reason };
     }
 
     return { process: true };

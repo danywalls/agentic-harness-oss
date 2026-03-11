@@ -36,6 +36,7 @@ import { KeyManagerImpl } from './core/keys.js';
 import { BackoffManagerImpl } from './core/backoff.js';
 import { LockManagerImpl } from './core/locks.js';
 import { tickV2, type RunnerDepsV2 } from './pipeline/runner.js';
+import { maybeSweep } from './pipeline/reconciler.js';
 import { StationRegistry } from './stations/registry.js';
 import { notifyDiscord } from './notify/discord.js';
 import { writeTokenUsageAsync } from './notify/supabase.js';
@@ -164,7 +165,7 @@ const pipelinesConfig = loadPipelinesConfig();
 
 let registry: StationRegistry;
 try {
-  registry = StationRegistry.createDefault(config);
+  registry = await StationRegistry.createDefault(config);
   log(`Station registry: ${registry.list().join(', ')}`);
 } catch (e: any) {
   log(`Fatal: Failed to build station registry: ${e.message}`);
@@ -207,8 +208,12 @@ const depsV2: RunnerDepsV2 = {
 async function main(): Promise<void> {
   log('═══ Factory loop starting (TypeScript v2 — multi-pipeline) ═══');
 
-  // Clean dead locks before processing
+  // Clean dead locks before processing (Layer 1: includes post-exit label reconciliation)
+  lockManager.setPipelinesConfig(pipelinesConfig, REPO);
   lockManager.cleanDeadLocks();
+
+  // Layer 3: Periodic reconciliation sweep (every 10 ticks)
+  maybeSweep(REPO, pipelinesConfig, log);
 
   // Key validation (only when using claude CLI)
   if (USE_CLAUDE_CLI) {

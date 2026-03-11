@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync, existsSync, statSync } from 'fs';
 import { execSync } from 'child_process';
 import type { LockEntry, LockFile, LockManager } from '../types/index.js';
+import type { PipelinesConfig } from '../types/pipeline.js';
+import { reconcileAfterExit } from '../pipeline/reconciler.js';
 
 /** Per-station lock TTL — complexity:simple gets shorter TTLs */
 export const LOCK_TTL: Record<string, number> = {
@@ -54,7 +56,15 @@ export class LockManagerImpl implements LockManager {
       logFile: string,
     ) => Promise<void>,
     private readonly notifyDiscord: (msg: string) => Promise<void>,
+    private pipelinesConfig?: PipelinesConfig,
+    private repo?: string,
   ) {}
+
+  /** Set pipelines config for post-exit label reconciliation */
+  setPipelinesConfig(config: PipelinesConfig, repo: string): void {
+    this.pipelinesConfig = config;
+    this.repo = repo;
+  }
 
   getLocks(): LockFile {
     try {
@@ -135,6 +145,14 @@ export class LockManagerImpl implements LockManager {
             // Capture token usage for completed runs
             if (val.issue && val.station && val.logFile) {
               this.writeTokenUsageAsync(val.issue, val.station, val.logFile).catch(() => {});
+            }
+            // Layer 1: Post-exit label reconciliation
+            if (val.issue && val.station && this.pipelinesConfig && this.repo) {
+              try {
+                reconcileAfterExit(val.issue, val.station, this.repo, this.pipelinesConfig, this.log);
+              } catch (e: any) {
+                this.log(`  Reconciliation error for #${val.issue}: ${e.message?.slice(0, 100)}`);
+              }
             }
           }
           if (val.pid) {

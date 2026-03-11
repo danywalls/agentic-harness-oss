@@ -80,20 +80,20 @@ export class StationRegistry {
    * review   → station:review   → station:publish
    * publish  → station:publish  → station:done
    */
-  static createDefault(_config: Config): StationRegistry {
-    // Lazy-import to avoid circular deps — stations import from base/registry
+  static async createDefault(_config: Config): Promise<StationRegistry> {
+    // Dynamic imports to avoid circular deps — stations import from base/registry
     // but registry doesn't import station implementations at module load time.
-    const { SpecStation } = require('./spec/index.js') as { SpecStation: new () => BaseStation };
-    const { DesignStation } = require('./design/index.js') as { DesignStation: new () => BaseStation };
-    const { BuildStation } = require('./build/index.js') as { BuildStation: new () => BaseStation };
-    const { QAStation } = require('./qa/index.js') as { QAStation: new () => BaseStation };
-    const { BugfixStation } = require('./bugfix/index.js') as { BugfixStation: new () => BaseStation };
+    const { SpecStation } = await import('./spec/index.js');
+    const { DesignStation } = await import('./design/index.js');
+    const { BuildStation } = await import('./build/index.js');
+    const { QAStation } = await import('./qa/index.js');
+    const { BugfixStation } = await import('./bugfix/index.js');
 
     // Content pipeline stations
-    const { ResearchStation } = require('./research/index.js') as { ResearchStation: new () => BaseStation };
-    const { DraftStation } = require('./draft/index.js') as { DraftStation: new () => BaseStation };
-    const { ReviewStation } = require('./review/index.js') as { ReviewStation: new () => BaseStation };
-    const { PublishStation } = require('./publish/index.js') as { PublishStation: new () => BaseStation };
+    const { ResearchStation } = await import('./research/index.js');
+    const { DraftStation } = await import('./draft/index.js');
+    const { ReviewStation } = await import('./review/index.js');
+    const { PublishStation } = await import('./publish/index.js');
 
     const registry = new StationRegistry();
 

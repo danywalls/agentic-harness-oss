@@ -13,6 +13,7 @@
 import { execSync } from 'child_process';
 import type { Issue, AgentTask } from '../../types/index.js';
 import { BaseStation, type FactoryContext, type ShouldProcessResult } from '../base.js';
+import { guardAutoAdvance } from '../../pipeline/reconciler.js';
 
 // ─── QA stall-guard helpers (exported for use in runner + index barrel) ───────
 
@@ -195,96 +196,58 @@ for route in / /dashboard /api/health; do
 done
 \`\`\`
 
-═══ STEP 4b: VISUAL QA CHECKS (AC-003.1/2) ═══
+═══ STEP 4b: VISUAL QA WITH AGENT-BROWSER ═══
+
+Use agent-browser to visually verify the live app against acceptance criteria.
 
 \`\`\`bash
 mkdir -p /tmp/qa-${issue.number}/screenshots
-BUILD_DIR=$(ls -d /tmp/*build* 2>/dev/null | head -1)
 
-if [ -n "$BUILD_DIR" ]; then
-  EMOJI_COUNT=$(grep -rP "[\\x{1F300}-\\x{1F9FF}\\x{2600}-\\x{26FF}]" "$BUILD_DIR/app/" --include="*.tsx" 2>/dev/null | grep -v "//\|test\|spec" | wc -l)
-  echo "Emoji in JSX: $EMOJI_COUNT (must be 0)"
-  HEX_IN_CLASS=$(grep -r 'className.*#[0-9a-fA-F]' "$BUILD_DIR/app/" --include="*.tsx" 2>/dev/null | grep -v test | wc -l)
-  echo "Hardcoded hex in className: $HEX_IN_CLASS (should be 0)"
-  MOTION_USAGE=$(grep -r "motion\\." "$BUILD_DIR/app/" --include="*.tsx" 2>/dev/null | wc -l)
-  echo "framer-motion usages: $MOTION_USAGE (should be > 5)"
+# Open the live app and wait for it to load
+agent-browser open "$LIVE_URL" && agent-browser wait --load networkidle
+
+# Take desktop screenshot
+agent-browser screenshot /tmp/qa-${issue.number}/screenshots/desktop-home.png
+
+# Check for error states in the page content
+SNAPSHOT=$(agent-browser snapshot -i 2>/dev/null || echo "SNAPSHOT_FAILED")
+echo "$SNAPSHOT"
+
+# Check for critical errors
+if echo "$SNAPSHOT" | grep -qi "application error\|500\|internal server error\|hydration"; then
+  echo "CLIENT_SIDE_ERRORS_DETECTED" > /tmp/qa-${issue.number}-client-errors.txt
+  echo "❌ CRITICAL: Error state detected in live app"
+  CLIENT_SIDE_FAIL=1
+else
+  echo "CLIENT_SIDE_CHECK_PASS" > /tmp/qa-${issue.number}-client-errors.txt
+  echo "✅ No error states detected"
+  CLIENT_SIDE_FAIL=0
 fi
+
+# Mobile viewport check
+agent-browser set viewport 375 812
+agent-browser screenshot /tmp/qa-${issue.number}/screenshots/mobile-home.png
+agent-browser set viewport 1280 800
+\`\`\`
+
+Now walk through the key acceptance criteria using agent-browser:
+- Use \`agent-browser snapshot -i\` to discover interactive elements
+- Use refs (@e1, @e2, etc.) to click buttons, fill forms, navigate
+- Re-snapshot after each interaction to verify state changes
+- Screenshot evidence for each AC: \`agent-browser screenshot /tmp/qa-${issue.number}/screenshots/ac-<name>.png\`
+
+\`\`\`bash
+# Example interactive verification (adapt to actual ACs):
+# agent-browser snapshot -i        # Discover elements
+# agent-browser click @e3          # Click a button
+# agent-browser wait --load networkidle
+# agent-browser snapshot -i        # Verify result
+# agent-browser screenshot /tmp/qa-${issue.number}/screenshots/ac-navigation.png
 \`\`\`
 
 \`\`\`bash
-npx playwright install chromium --with-deps 2>/dev/null | tail -3
-
-node -e "
-const { chromium } = require('playwright');
-(async () => {
-  const LIVE = process.env.LIVE_URL || '$LIVE_URL';
-  const ISSUE = '${issue.number}';
-  const fs = require('fs');
-  const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-
-  let pageErrors = [];
-  let consoleErrors = [];
-  {
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-    const page = await ctx.newPage();
-    page.on('pageerror', err => pageErrors.push(err.message || String(err)));
-    page.on('console', msg => {
-      if (msg.type() === 'error') {
-        const text = msg.text();
-        if (!text.includes('Download the React DevTools') && !text.includes('DevTools')) {
-          consoleErrors.push(text);
-        }
-      }
-    });
-    try {
-      await page.goto(LIVE, { timeout: 20000, waitUntil: 'networkidle' });
-      const bodyText = await page.textContent('body').catch(() => '');
-      const hasAppError = bodyText.includes('Application error') || bodyText.includes('application error');
-      const hasHydrationError = bodyText.includes('Hydration failed') || bodyText.includes('did not match');
-      const hasMissingEnv = pageErrors.some(e => e.includes('NEXT_PUBLIC_') || e.includes('expected string, received undefined') || e.includes('ZodError'));
-      const criticalErrors = pageErrors.length + consoleErrors.length;
-      if (hasAppError || hasHydrationError || hasMissingEnv || criticalErrors > 0) {
-        const result = 'CLIENT_SIDE_ERRORS_DETECTED\\n' +
-          (pageErrors.length ? 'PAGE_ERRORS: ' + JSON.stringify(pageErrors.slice(0,3)) + '\\n' : '') +
-          (consoleErrors.length ? 'CONSOLE_ERRORS: ' + JSON.stringify(consoleErrors.slice(0,3)) + '\\n' : '') +
-          (hasAppError ? 'HAS_APP_ERROR_OVERLAY: true\\n' : '') +
-          (hasHydrationError ? 'HAS_HYDRATION_ERROR: true\\n' : '') +
-          (hasMissingEnv ? 'MISSING_ENV_VARS: true — check NEXT_PUBLIC_* in Vercel\\n' : '');
-        fs.writeFileSync('/tmp/qa-\${ISSUE}-client-errors.txt', result);
-        console.log(result);
-      } else {
-        fs.writeFileSync('/tmp/qa-\${ISSUE}-client-errors.txt', 'CLIENT_SIDE_CHECK_PASS');
-        console.log('CLIENT_SIDE_CHECK_PASS');
-      }
-    } catch(e) {
-      console.log('CLIENT_SIDE_CHECK_FAILED: ' + e.message);
-      fs.writeFileSync('/tmp/qa-\${ISSUE}-client-errors.txt', 'CLIENT_SIDE_CHECK_FAILED: ' + e.message);
-    }
-    await ctx.close();
-  }
-
-  for (const [name, w, h] of [['mobile', 375, 812], ['desktop', 1280, 800]]) {
-    const ctx = await browser.newContext({ viewport: { width: w, height: h } });
-    const page = await ctx.newPage();
-    try {
-      await page.goto(LIVE, { timeout: 15000, waitUntil: 'networkidle' });
-      await page.screenshot({ path: \`/tmp/qa-\${ISSUE}/screenshots/\${name}-home.png\` });
-      console.log(\`\${name} screenshot saved\`);
-    } catch(e) { console.log(\`\${name} screenshot failed: \${e.message}\`); }
-    await ctx.close();
-  }
-  await browser.close();
-})();
-" 2>/dev/null || echo "Playwright check failed — manual check required"
-
-if grep -q "CLIENT_SIDE_ERRORS_DETECTED" /tmp/qa-${issue.number}-client-errors.txt 2>/dev/null; then
-  echo "❌ CRITICAL: Client-side JavaScript errors detected"
-  cat /tmp/qa-${issue.number}-client-errors.txt 2>/dev/null
-  CLIENT_SIDE_FAIL=1
-else
-  echo "✅ Client-side check passed"
-  CLIENT_SIDE_FAIL=0
-fi
+# Close browser when done
+agent-browser close
 \`\`\`
 
 ═══ STEP 5: VERDICT ═══

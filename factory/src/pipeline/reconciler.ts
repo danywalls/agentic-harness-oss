@@ -1,0 +1,292 @@
+/**
+ * Label reconciliation for stuck issues.
+ *
+ * Three layers:
+ * 1. Post-exit: Called from cleanDeadLocks() after agent dies — flips label if work artifact exists
+ * 2. Guard auto-advance: Called from shouldProcess() guards — flips label if work already done
+ * 3. Periodic sweep: Scans all open issues every N ticks — catches anything layers 1-2 missed
+ */
+
+import { execSync } from 'child_process';
+import type { PipelinesConfig, PipelineStageConfig } from '../types/pipeline.js';
+
+// ── Stage → artifact detection patterns ─────────────────────────────────────
+
+const STAGE_ARTIFACTS: Record<string, RegExp> = {
+  spec: /## (SPEC|Specification|Requirements)/i,
+  design: /## (DESIGN|Design Specification|DESIGN\.md)/i,
+  build: /## BUILD COMPLETE/i,
+  qa: /## QA Report/i,
+  bugfix: /## (BUGFIX|Bug Fix) (COMPLETE|Report)/i,
+};
+
+// ── Pipeline stage lookup ───────────────────────────────────────────────────
+
+/**
+ * Find the pipeline stage for a given station label.
+ */
+export function findStageByLabel(
+  pipelinesConfig: PipelinesConfig,
+  stationLabel: string,
+): PipelineStageConfig | null {
+  for (const pipeline of pipelinesConfig.pipelines) {
+    for (const stage of pipeline.stages) {
+      if (stage.label === stationLabel) {
+        return stage;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Find the stage that produces a given label (i.e., stage.nextLabel === label).
+ */
+export function findStageByNextLabel(
+  pipelinesConfig: PipelinesConfig,
+  label: string,
+): PipelineStageConfig | null {
+  for (const pipeline of pipelinesConfig.pipelines) {
+    for (const stage of pipeline.stages) {
+      if (stage.nextLabel === label) {
+        return stage;
+      }
+    }
+  }
+  return null;
+}
+
+// ── Label flip helper ───────────────────────────────────────────────────────
+
+/**
+ * Flip an issue's station label from currentLabel to nextLabel.
+ * Also cleans up any other station:* labels (fixes dual-label issues).
+ */
+export function flipLabel(
+  issueNumber: number,
+  repo: string,
+  currentLabel: string,
+  nextLabel: string,
+  log: (msg: string) => void,
+  reason: string,
+): boolean {
+  try {
+    // Get current labels
+    const labelsJson = execSync(
+      `gh issue view ${issueNumber} --repo ${repo} --json labels --jq '[.labels[].name]'`,
+      { encoding: 'utf8', timeout: 15000 },
+    ).trim();
+    const labels: string[] = JSON.parse(labelsJson);
+
+    // Collect all station:* labels to remove
+    const stationLabels = labels.filter(l => l.startsWith('station:'));
+
+    if (!stationLabels.includes(currentLabel)) {
+      // Label already changed (maybe agent flipped it) — no-op
+      return false;
+    }
+
+    // Build remove args
+    const removeArgs = stationLabels.map(l => `--remove-label "${l}"`).join(' ');
+
+    execSync(
+      `gh issue edit ${issueNumber} --repo ${repo} ${removeArgs} --add-label "${nextLabel}"`,
+      { encoding: 'utf8', timeout: 15000 },
+    );
+
+    log(`🔄 Auto-advanced #${issueNumber}: ${currentLabel} → ${nextLabel} (${reason})`);
+    return true;
+  } catch (e: any) {
+    log(`⚠️ Failed to auto-advance #${issueNumber}: ${e.message?.slice(0, 100)}`);
+    return false;
+  }
+}
+
+// ── Layer 1: Post-exit reconciliation ───────────────────────────────────────
+
+/**
+ * Called after cleanDeadLocks detects a dead agent that ran > 2 min.
+ * Checks if the issue label should be advanced.
+ */
+export function reconcileAfterExit(
+  issueNumber: number,
+  station: string,
+  repo: string,
+  pipelinesConfig: PipelinesConfig,
+  log: (msg: string) => void,
+): void {
+  // Find the current stage label for this station
+  const stageLabel = `station:${station === 'spec' ? 'intake' : station}`;
+
+  // Find stage by stationId
+  let stage: PipelineStageConfig | null = null;
+  for (const pipeline of pipelinesConfig.pipelines) {
+    for (const s of pipeline.stages) {
+      if (s.stationId === station) {
+        stage = s;
+        break;
+      }
+    }
+    if (stage) break;
+  }
+
+  if (!stage || !stage.nextLabel) {
+    log(`  No stage/nextLabel found for station "${station}" — skipping reconciliation`);
+    return;
+  }
+
+  // Check if issue still has the current stage label
+  try {
+    const labelsJson = execSync(
+      `gh issue view ${issueNumber} --repo ${repo} --json labels --jq '[.labels[].name]'`,
+      { encoding: 'utf8', timeout: 15000 },
+    ).trim();
+    const labels: string[] = JSON.parse(labelsJson);
+
+    if (labels.includes(stage.label)) {
+      // Label hasn't been flipped — check if work artifact exists
+      const comments = execSync(
+        `gh issue view ${issueNumber} --repo ${repo} --comments --json comments --jq '[.comments[].body]'`,
+        { encoding: 'utf8', timeout: 15000 },
+      ).trim();
+
+      const artifactPattern = STAGE_ARTIFACTS[station];
+      const hasArtifact = artifactPattern ? artifactPattern.test(comments) : true;
+
+      if (hasArtifact) {
+        flipLabel(issueNumber, repo, stage.label, stage.nextLabel, log, `post-exit reconciliation: ${station} agent completed`);
+      } else {
+        log(`  #${issueNumber}: ${station} agent exited but no work artifact found — label unchanged`);
+      }
+    }
+    // else: label already advanced, nothing to do
+  } catch (e: any) {
+    log(`  Reconciliation check failed for #${issueNumber}: ${e.message?.slice(0, 100)}`);
+  }
+}
+
+// ── Layer 2: Guard auto-advance helper ──────────────────────────────────────
+
+/**
+ * Called by shouldProcess guards when they detect work is already done.
+ * Flips the label and returns the skip reason.
+ */
+export function guardAutoAdvance(
+  issueNumber: number,
+  repo: string,
+  currentLabel: string,
+  nextLabel: string,
+  log: (msg: string) => void,
+  guardName: string,
+): string {
+  const flipped = flipLabel(
+    issueNumber, repo, currentLabel, nextLabel, log,
+    `guard auto-advance: ${guardName}`,
+  );
+  if (flipped) {
+    return `${guardName} — auto-advanced to ${nextLabel}`;
+  }
+  return `${guardName} — label already correct or flip failed`;
+}
+
+// ── Layer 3: Periodic reconciliation sweep ──────────────────────────────────
+
+const SWEEP_INTERVAL = 10; // Run every N ticks
+let tickCount = 0;
+
+/**
+ * Run a full reconciliation sweep if enough ticks have passed.
+ * Call this from the main loop after each tick.
+ */
+export function maybeSweep(
+  repo: string,
+  pipelinesConfig: PipelinesConfig,
+  log: (msg: string) => void,
+): void {
+  tickCount++;
+  if (tickCount < SWEEP_INTERVAL) return;
+  tickCount = 0;
+
+  log('🔍 Running periodic reconciliation sweep...');
+
+  try {
+    // Fetch all open issues with station labels
+    const issuesJson = execSync(
+      `gh issue list --repo ${repo} --state open --label "station:" --json number,labels --limit 50`,
+      { encoding: 'utf8', timeout: 30000 },
+    ).trim();
+
+    // gh label filter might not work with prefix — fetch all and filter
+    const allIssuesJson = execSync(
+      `gh issue list --repo ${repo} --state open --json number,labels,title --limit 100`,
+      { encoding: 'utf8', timeout: 30000 },
+    ).trim();
+
+    const issues = JSON.parse(allIssuesJson) as Array<{
+      number: number;
+      title: string;
+      labels: Array<{ name: string }>;
+    }>;
+
+    let reconciled = 0;
+
+    for (const issue of issues) {
+      const labels = issue.labels.map(l => l.name);
+      const stationLabels = labels.filter(l => l.startsWith('station:'));
+
+      // Skip done/blocked/skip
+      if (stationLabels.some(l => ['station:done', 'station:blocked', 'station:skip'].includes(l))) {
+        continue;
+      }
+
+      // Skip if no station label
+      if (stationLabels.length === 0) continue;
+
+      // Fix dual labels — if multiple station labels, keep the most advanced one
+      if (stationLabels.length > 1) {
+        log(`  ⚠️ #${issue.number} has ${stationLabels.length} station labels: ${stationLabels.join(', ')}`);
+        // Keep only the most advanced label
+        const stageOrder = ['station:intake', 'station:spec', 'station:design', 'station:build', 'station:qa', 'station:bugfix', 'station:done'];
+        const sorted = stationLabels.sort((a, b) => stageOrder.indexOf(b) - stageOrder.indexOf(a));
+        const keep = sorted[0];
+        const remove = sorted.slice(1);
+        for (const label of remove) {
+          try {
+            execSync(`gh issue edit ${issue.number} --repo ${repo} --remove-label "${label}"`, { encoding: 'utf8', timeout: 10000 });
+            log(`  🧹 Removed stale label "${label}" from #${issue.number} (keeping "${keep}")`);
+          } catch {}
+        }
+        reconciled++;
+        continue;
+      }
+
+      const currentLabel = stationLabels[0];
+      const stage = findStageByLabel(pipelinesConfig, currentLabel);
+      if (!stage || !stage.nextLabel) continue;
+
+      // Check if work artifact for this stage exists
+      const artifactPattern = STAGE_ARTIFACTS[stage.stationId];
+      if (!artifactPattern) continue;
+
+      try {
+        const comments = execSync(
+          `gh issue view ${issue.number} --repo ${repo} --comments --json comments --jq '[.comments[].body]'`,
+          { encoding: 'utf8', timeout: 15000 },
+        ).trim();
+
+        if (artifactPattern.test(comments)) {
+          flipLabel(issue.number, repo, currentLabel, stage.nextLabel, log, 'periodic sweep');
+          reconciled++;
+        }
+      } catch {}
+    }
+
+    if (reconciled > 0) {
+      log(`🔍 Reconciliation sweep complete: ${reconciled} issue(s) fixed`);
+    } else {
+      log('🔍 Reconciliation sweep complete: no stuck issues found');
+    }
+  } catch (e: any) {
+    log(`⚠️ Reconciliation sweep failed: ${e.message?.slice(0, 100)}`);
+  }
+}

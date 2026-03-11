@@ -60,7 +60,7 @@ export function spawnAgent(
         '--model', model,
         '--output-format', 'json',
         '--allowedTools', 'Bash(*)', 'Read(*)', 'Write(*)', 'Edit(*)', 'Glob(*)', 'Grep(*)',
-        '--dangerously-skip-permissions',
+        ...(process.getuid?.() === 0 ? [] : ['--dangerously-skip-permissions']),
       ],
       {
         detached: true,
