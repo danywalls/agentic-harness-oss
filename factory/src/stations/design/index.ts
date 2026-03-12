@@ -164,6 +164,52 @@ npx skills install pbakaus/impeccable@frontend-design
 Use reference apps, hero patterns, card patterns, nav patterns, and CTA patterns appropriate for this project type.
 Determine if this project type should default to dark mode. State the mode choice and rationale in the Design Philosophy section.
 
+## Step 2b — Define BOTH Dark and Light Mode Tokens (MANDATORY)
+
+**Every DESIGN.md MUST include a complete token system for BOTH modes.** This is non-negotiable.
+
+Follow Impeccable's two-layer token hierarchy:
+1. **Primitive tokens** — raw OKLCH colors (shared across modes)
+2. **Semantic tokens** — role-based tokens redefined per mode
+
+**Rules (from Impeccable color-and-contrast reference):**
+- ALL neutrals must be tinted (same hue as primary, chroma ~0.01) — no flat grays
+- Sidebar, header, content, cards MUST share the same tint family
+- Dark mode: surface elevation via lighter surfaces (NOT shadows), base at 12-18% lightness
+- Dark mode: desaturate accents slightly (reduce chroma ~30%)
+- Dark mode: reduce body font weight (350 instead of 400)
+- Dark mode: never use pure black (#000) — use tinted dark surfaces
+- Light mode: use tinted off-whites, not pure white for base surfaces
+- ALL text must meet WCAG AA (4.5:1 body, 3:1 UI elements)
+- Badge/tag colors must be calibrated for BOTH modes separately
+- One unified accent color — referenced by sidebar, buttons, links, focus states
+
+**Include in DESIGN.md:**
+\`\`\`
+### Token System
+
+#### Primitive Tokens (shared)
+--primary: oklch(...)
+--green: oklch(...)
+--red: oklch(...)
+...
+
+#### Dark Mode Semantic Tokens
+--surface-base: oklch(12% 0.01 [hue])
+--surface-1: oklch(15% 0.01 [hue])
+--surface-2: oklch(20% 0.01 [hue])
+--text-primary: oklch(95% 0.01 [hue])
+--text-secondary: oklch(70% 0.01 [hue])
+...
+
+#### Light Mode Semantic Tokens
+--surface-base: oklch(98% 0.005 [hue])
+--surface-1: oklch(100% 0 0)
+...
+\`\`\`
+
+**If you skip mode tokens, the BUILD agent will produce inconsistent dark/light modes.** This section prevents that.
+
 ## Step 3 — Write DESIGN.md to /tmp/design-issue-${issue.number}.md
 
 Produce a complete design specification. Every section is mandatory. No vague language — every value must be exact and implementable.
