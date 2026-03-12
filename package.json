@@ -1,6 +1,6 @@
 {
   "name": "agentic-harness",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Autonomous multi-station agent pipeline. SPEC → DESIGN → BUILD → QA → BUGFIX → DONE.",
   "type": "module",
   "bin": {
