@@ -432,9 +432,17 @@ cp /tmp/migration-${issue.number}.sql supabase/migrations/$(date +%Y%m%d%H%M%S)_
 supabase db push --linked
 \`\`\`
 
-### 6. Implement all spec requirements on top of the template
+### 6. Read Impeccable design skill (MANDATORY for all UI work)
+\`\`\`bash
+cat ~/.agents/skills/frontend-design/SKILL.md 2>/dev/null
+\`\`\`
+If not installed: \`npx skills install pbakaus/impeccable@frontend-design\`
 
-Build every feature described in the spec. Follow the DESIGN.md for all visual decisions.
+**Follow Impeccable principles in ALL UI implementation.** No generic AI aesthetics.
+
+### 7. Implement all spec requirements on top of the template
+
+Build every feature described in the spec. Follow the DESIGN.md for all visual decisions. Apply Impeccable design principles throughout.
 
 ### 7. Install deps + TypeScript gate (HARD STOP on errors)
 \`\`\`bash

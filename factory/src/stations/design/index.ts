@@ -114,9 +114,27 @@ Extract:
 - User roles and what each role sees
 - Tech stack and any design constraints
 
-## Step 2 — Read the design system reference
+## Step 2 — Read Impeccable design skill (MANDATORY)
 
-If design reference files exist in your workspace (e.g., design-system-reference.md, UI/UX guidelines), read them now.
+You MUST follow the Impeccable frontend design methodology (pbakaus/impeccable). If the skill is installed, read its SKILL.md and all reference files:
+\`\`\`bash
+cat ~/.agents/skills/frontend-design/SKILL.md 2>/dev/null
+ls ~/.agents/skills/frontend-design/reference/ 2>/dev/null && for f in ~/.agents/skills/frontend-design/reference/*.md; do echo "=== $f ==="; cat "$f"; done
+\`\`\`
+
+If not installed, install it:
+\`\`\`bash
+npx skills install pbakaus/impeccable@frontend-design
+\`\`\`
+
+**Impeccable principles are non-negotiable:**
+- Choose a BOLD aesthetic direction — no generic "AI slop"
+- Use distinctive typography (NOT Inter/Arial/system defaults for display)
+- Apply OKLCH color with tinted neutrals, not flat grays
+- Follow spatial design systems (consistent scales, not arbitrary values)
+- Design purposeful motion (easing curves, staggered animations)
+- Write excellent UX copy (clear labels, helpful errors, good empty states)
+
 Use reference apps, hero patterns, card patterns, nav patterns, and CTA patterns appropriate for this project type.
 Determine if this project type should default to dark mode. State the mode choice and rationale in the Design Philosophy section.
 
