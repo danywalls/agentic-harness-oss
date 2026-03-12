@@ -103,6 +103,25 @@ echo "Build repo: $BUILD_REPO"
 **Test the PREVIEW URL (not production).** This is the PR deployment — it has NOT been merged to main yet.
 For internal dashboard issues, fall back to: ${ctx.env.factoryAppUrl}
 
+═══ STEP 2b: READ REGRESSION MANIFEST ═══
+
+\`\`\`bash
+# Clone the build repo to read REGRESSION.md
+if [ -n "$BUILD_REPO" ] && [ -n "$BRANCH_NAME" ]; then
+  git clone --depth 1 --branch "$BRANCH_NAME" "https://github.com/$BUILD_REPO" /tmp/uat-repo-${issue.number} 2>/dev/null
+  if [ -f /tmp/uat-repo-${issue.number}/REGRESSION.md ]; then
+    echo "=== REGRESSION MANIFEST ==="
+    cat /tmp/uat-repo-${issue.number}/REGRESSION.md
+    echo "==========================="
+    HAS_REGRESSION=1
+  else
+    HAS_REGRESSION=0
+  fi
+fi
+\`\`\`
+
+**IMPORTANT:** If REGRESSION.md exists, you must test EVERY feature listed — not just the new one. You are testing the ENTIRE app as a user. Any broken existing feature = UAT FAIL.
+
 ═══ STEP 3: FIRST IMPRESSIONS (30 seconds) ═══
 
 \`\`\`bash
@@ -167,6 +186,20 @@ For EACH user flow from the spec:
    agent-browser snapshot -i
    agent-browser set viewport 1280 800
    \`\`\`
+
+═══ STEP 5b: REGRESSION WALKTHROUGH (if REGRESSION.md exists) ═══
+
+If HAS_REGRESSION=1, walk through EVERY feature in REGRESSION.md as a user:
+
+For each feature section:
+1. Navigate to the listed route/page
+2. Try each test step as a non-technical user
+3. Evaluate: Does it work? Is it intuitive? Does it look right?
+4. Screenshot: \`agent-browser screenshot /tmp/uat-${issue.number}/regression-<feature>.png\`
+5. Note any broken or confusing behavior
+
+**This is the full regression suite.** Every feature listed must still work.
+If an existing feature is broken by the new changes, UAT FAILS.
 
 ═══ STEP 6: CROSS-CUTTING CHECKS ═══
 

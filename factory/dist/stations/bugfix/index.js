@@ -76,8 +76,9 @@ fi
 echo "✅ TypeScript OK"
 \`\`\`
 
-### 5. Update CLAUDE.md with bug learnings
-If CLAUDE.md exists, append the bugs you found and fixed to the "Known Issues & Gotchas" section. This prevents future agents from introducing the same bugs.
+### 5. Update CLAUDE.md + REGRESSION.md with bug learnings
+If CLAUDE.md exists, append bugs to the "Known Issues & Gotchas" section.
+If REGRESSION.md exists, update any test steps that were incorrect or add new ones for the fixed behavior.
 \`\`\`bash
 cd /tmp/bugfix-work
 git add -A

@@ -176,6 +176,27 @@ Extract:
 - The 3-5 MOST CRITICAL acceptance criteria (AC)
 - Any explicit E2E test steps from the SPEC comment
 
+═══ STEP 3b: READ REGRESSION MANIFEST ═══
+
+\`\`\`bash
+# Clone the build repo to read REGRESSION.md
+if [ -n "$BUILD_REPO" ] && [ -n "$BRANCH_NAME" ]; then
+  git clone --depth 1 --branch "$BRANCH_NAME" "https://github.com/$BUILD_REPO" /tmp/qa-repo-${issue.number} 2>/dev/null
+  if [ -f /tmp/qa-repo-${issue.number}/REGRESSION.md ]; then
+    echo "=== REGRESSION MANIFEST ==="
+    cat /tmp/qa-repo-${issue.number}/REGRESSION.md
+    echo "==========================="
+    HAS_REGRESSION=1
+  else
+    echo "No REGRESSION.md found"
+    HAS_REGRESSION=0
+  fi
+fi
+\`\`\`
+
+If REGRESSION.md exists, you MUST test EVERY feature listed — not just the new ones.
+This is the full regression suite. Any failure = QA FAIL.
+
 ═══ STEP 4: SMOKE TEST ═══
 
 \`\`\`bash
@@ -233,6 +254,19 @@ Now walk through the key acceptance criteria using agent-browser:
 # agent-browser snapshot -i        # Verify result
 # agent-browser screenshot /tmp/qa-${issue.number}/screenshots/ac-navigation.png
 \`\`\`
+
+═══ STEP 4c: REGRESSION TEST (if REGRESSION.md exists) ═══
+
+If HAS_REGRESSION=1, walk through EVERY test step in REGRESSION.md using agent-browser:
+
+For each feature section in REGRESSION.md:
+1. Navigate to the listed route
+2. Execute each test step
+3. Verify expected results
+4. Screenshot evidence: \`agent-browser screenshot /tmp/qa-${issue.number}/screenshots/regression-<feature>.png\`
+5. Mark as PASS or FAIL
+
+**ANY regression failure = entire QA FAILS.** Existing features MUST keep working.
 
 \`\`\`bash
 # Close browser when done

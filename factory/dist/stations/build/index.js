@@ -233,7 +233,33 @@ echo "TypeScript check passed"
 ### 5. Update CLAUDE.md with changes
 If CLAUDE.md exists, update the "Known Issues & Gotchas" and "Change Request Notes" sections with anything you learned during this change. If it doesn't exist, create one (follow the template from new builds).
 
-### 6. Commit + push feature branch + open PR
+### 6. Update REGRESSION.md (feature test manifest)
+\`\`\`bash
+cd /tmp/build-work
+
+# Read existing regression manifest
+if [ -f REGRESSION.md ]; then
+  cat REGRESSION.md
+fi
+
+# Append test steps for the changes you just made
+cat >> REGRESSION.md << 'REG_EOF'
+
+## [CHANGE_NAME] (Issue #${issue.number})
+_Added: $(date -u +%Y-%m-%d)_
+
+### Test Steps
+- [ ] [Step 1 — what to do and expected result]
+- [ ] [Step 2 — next verification]
+
+### Routes/Endpoints
+- [Affected routes]
+
+REG_EOF
+\`\`\`
+**Replace placeholders with ACTUAL test steps.** QA and UAT will execute every test in this file.
+
+### 7. Commit + push feature branch + open PR
 \`\`\`bash
 cd /tmp/build-work
 git add -A
@@ -554,7 +580,52 @@ CLAUDE_EOF
 
 **IMPORTANT:** Replace all placeholders with actual values from your build. Be specific and detailed — this file is the project's memory.
 
-### 10. Commit to feature branch + push + open PR
+### 10. Update REGRESSION.md (feature test manifest — MANDATORY)
+
+REGRESSION.md is the living test manifest. Every feature gets test steps here. QA and UAT agents test EVERYTHING on this list — not just new features.
+
+\`\`\`bash
+cd /tmp/build-work
+
+# If REGRESSION.md exists, READ it first and APPEND your new features
+if [ -f REGRESSION.md ]; then
+  cat REGRESSION.md
+  echo "--- Appending new feature tests ---"
+else
+  # Create the file with a header
+  cat > REGRESSION.md << 'REG_HEADER'
+# REGRESSION.md — Feature Test Manifest
+
+This file lists every testable feature in the app. QA and UAT agents
+run through this ENTIRE list on every build — not just new features.
+If any existing feature breaks, the build fails.
+
+**Format:** Each feature has a category, test steps, and expected result.
+Mark tests with \`[auth]\` if they require login first.
+
+REG_HEADER
+fi
+
+# Append test steps for the features you just built
+cat >> REGRESSION.md << 'REG_NEW'
+
+## [FEATURE_NAME] (Issue #${issue.number})
+_Added: $(date -u +%Y-%m-%d)_
+
+### Test Steps
+- [ ] [Step 1 — describe what to do and what should happen]
+- [ ] [Step 2 — next action and expected result]
+- [ ] [Step 3 — ...]
+
+### Routes/Endpoints
+- [List affected routes, e.g., /dashboard/apps, GET /api/apps]
+
+REG_NEW
+\`\`\`
+
+**IMPORTANT:** Replace the placeholders above with ACTUAL test steps for the features you built. Be specific — include URLs, button labels, expected values. These steps will be executed by QA and UAT agents using agent-browser.
+
+### 11. Commit to feature branch + push + open PR
 \`\`\`bash
 cd /tmp/build-work
 BRANCH_NAME="feature/issue-${issue.number}"
