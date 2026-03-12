@@ -245,9 +245,21 @@ cat /tmp/design-issue-${issue.number}.md
 
 If no DESIGN.md comment exists, derive the change from the issue title and details.
 
+### 3b. Check for existing overlapping features (DEDUPLICATION)
+\`\`\`bash
+cd /tmp/build-work
+# List existing components and pages
+find src/components -name "*.tsx" 2>/dev/null | sort
+find src/app -name "page.tsx" 2>/dev/null | sort
+# Search for features that might overlap with this change
+grep -rl "$(echo '${issue.title}' | tr ' ' '\\n' | grep -E '^[A-Z]' | head -3 | tr '\\n' '\\|' | sed 's/|$//')" src/ --include="*.tsx" 2>/dev/null | head -10
+\`\`\`
+**If an existing component already does what you're building, ENHANCE it — do not create a duplicate.**
+
 ### 4. Implement the requested changes
 - Make ONLY the changes requested — preserve everything else
 - Follow the DESIGN.md spec if available
+- REUSE existing components where possible — check before creating new ones
 
 ### 4b. TypeScript gate (HARD STOP)
 \`\`\`bash

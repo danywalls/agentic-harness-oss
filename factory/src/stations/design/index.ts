@@ -114,6 +114,32 @@ Extract:
 - User roles and what each role sees
 - Tech stack and any design constraints
 
+## Step 1b — Inventory existing UI features (DEDUPLICATION CHECK)
+
+If this is a change request on an existing build repo, audit what already exists before designing new features:
+\`\`\`bash
+# Check for existing components that might overlap with this issue
+cd /tmp/existing-build-${issue.number} 2>/dev/null || cd /tmp/build-work 2>/dev/null
+
+# List all page routes
+find src/app -name "page.tsx" 2>/dev/null | sort
+
+# List all components
+find src/components -name "*.tsx" 2>/dev/null | sort
+
+# Search for any features that might overlap with what we're about to design
+# (Adapt the grep terms based on the issue title/requirements)
+grep -rl "NewIssue\\|Modal\\|Button.*create\\|Dashboard\\|Activity\\|Settings" src/ --include="*.tsx" 2>/dev/null | head -20
+
+# Read CLAUDE.md for documented features
+cat CLAUDE.md 2>/dev/null
+\`\`\`
+
+**CRITICAL: If an existing component already does what you're about to design, do NOT design a duplicate. Instead:**
+- Enhance the existing component
+- Move it if it needs to be in a different location
+- Document in DESIGN.md which existing components to reuse vs create new
+
 ## Step 2 — Read Impeccable design skill (MANDATORY)
 
 You MUST follow the Impeccable frontend design methodology (pbakaus/impeccable). If the skill is installed, read its SKILL.md and all reference files:
