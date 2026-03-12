@@ -212,7 +212,7 @@ Extract:
 - Change type (design / bugfix / feature)
 - Any details or context provided
 
-### 2. Clone EXISTING build repo (no template setup)
+### 2. Clone EXISTING build repo + create feature branch
 \`\`\`bash
 CLONE_URL=$(curl -s -X POST ${ctx.env.factoryAppUrl}/api/github/clone-token \\
   -H "Content-Type: application/json" \\
@@ -222,6 +222,8 @@ CLONE_URL=$(curl -s -X POST ${ctx.env.factoryAppUrl}/api/github/clone-token \\
 git clone "$CLONE_URL" /tmp/build-work
 cd /tmp/build-work
 git remote set-url origin "$CLONE_URL"
+BRANCH_NAME="feature/issue-${issue.number}"
+git checkout -b "$BRANCH_NAME"
 \`\`\`
 
 ### 2b. Read CLAUDE.md (project memory — CRITICAL)
@@ -262,53 +264,77 @@ echo "TypeScript check passed"
 
 ### 5. Update CLAUDE.md with changes
 If CLAUDE.md exists, update the "Known Issues & Gotchas" and "Change Request Notes" sections with anything you learned during this change. If it doesn't exist, create one (follow the template from new builds).
-\`\`\`bash
-git add -A
-git commit -m "change: ${issue.title}"
-git push origin main
-\`\`\`
 
-### 6. Deploy
+### 6. Commit + push feature branch + open PR
 \`\`\`bash
 cd /tmp/build-work
-${submissionId && SUPABASE_URL
-  ? `EXISTING_LIVE_URL=$(curl -s \\
-  "${SUPABASE_URL}/rest/v1/submissions?id=eq.${submissionId}&select=live_url" \\
-  -H "apikey: ${SUPABASE_SERVICE_KEY}" \\
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" | jq -r '.[0].live_url // empty')
+git add -A
+git commit -m "feat(#${issue.number}): ${issue.title}"
+git push origin "$BRANCH_NAME"
 
-if [ -n "$EXISTING_LIVE_URL" ]; then
-  ORIGINAL_PROJECT=$(echo "$EXISTING_LIVE_URL" | sed 's|https://||' | sed 's|\\.vercel\\.app.*||')
-  echo "Linking to existing Vercel project: $ORIGINAL_PROJECT"
-fi`
-  : '# Deploy to your configured hosting provider'}
+# Open PR against main
+PR_URL=$(gh pr create \\
+  --repo ${buildRepo} \\
+  --base main \\
+  --head "$BRANCH_NAME" \\
+  --title "feat(#${issue.number}): ${issue.title}" \\
+  --body "## Change Request — Issue #${issue.number}
 
-DEPLOY_OUT=$(vercel --prod --yes 2>&1)
-DEPLOY_EXIT=$?
-echo "$DEPLOY_OUT" | tail -15
-if [ $DEPLOY_EXIT -ne 0 ]; then
-  echo "DEPLOY FAILED (exit $DEPLOY_EXIT)"
-  gh issue comment ${issue.number} --repo ${ctx.env.repo} \\
-    --body "## BUILD FAILED (Change Request)
+**Source:** ${ctx.env.repo}#${issue.number}
+**Type:** Change Request
 
-Vercel deploy exited with code \$DEPLOY_EXIT. Station label NOT flipped — manual investigation required."
-  exit 1
-fi
-LIVE_URL=$(vercel list 2>/dev/null | grep -m1 "https://" | awk '{print $2}')
-echo "Deploy succeeded: $LIVE_URL"
+### Changes
+- [List key changes made]
 
-# Post-deploy health check
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$LIVE_URL" --max-time 20)
-echo "Home page HTTP status: $HTTP_STATUS"
+### Testing
+- TypeScript: ✅ passes
+- Vercel preview: deployed automatically
+
+---
+*Automated PR from Factory Pipeline. QA and UAT will review before merge.*" 2>&1)
+echo "PR created: $PR_URL"
+PR_NUMBER=$(echo "$PR_URL" | grep -oP '\\d+$')
 \`\`\`
 
-### 7. Post BUILD COMPLETE comment + flip label
+### 7. Wait for Vercel preview deployment
+Vercel auto-deploys PRs with preview URLs. Wait for it:
 \`\`\`bash
-gh issue comment ${issue.number} --repo ${ctx.env.repo} --body "## BUILD COMPLETE (Change Request)\\n\\nLive URL: $LIVE_URL\\nBuild repo: https://github.com/${buildRepo}\\nChanges applied: ${issue.title}"
+echo "Waiting for Vercel preview deployment..."
+sleep 30
+# Get preview URL from PR deployments or Vercel
+PREVIEW_URL=$(gh pr view "$PR_NUMBER" --repo ${buildRepo} --json comments --jq '.comments[-1].body' 2>/dev/null | grep -oP 'https://[\\S]+\\.vercel\\.app' | head -1)
+if [ -z "$PREVIEW_URL" ]; then
+  # Fallback: check Vercel deployments for the branch
+  PREVIEW_URL=$(vercel list 2>/dev/null | grep "$BRANCH_NAME\\|issue-${issue.number}" | grep -oP 'https://[\\S]+\\.vercel\\.app' | head -1)
+fi
+if [ -z "$PREVIEW_URL" ]; then
+  # Last fallback: deploy preview manually
+  PREVIEW_URL=$(vercel --yes 2>&1 | grep -oP 'https://[\\S]+\\.vercel\\.app' | head -1)
+fi
+echo "Preview URL: $PREVIEW_URL"
+
+# Health check the preview
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PREVIEW_URL" --max-time 20)
+echo "Preview HTTP status: $HTTP_STATUS"
+\`\`\`
+
+### 8. Post BUILD COMPLETE comment + flip label
+\`\`\`bash
+gh issue comment ${issue.number} --repo ${ctx.env.repo} --body "## BUILD COMPLETE (Change Request)
+
+**PR:** $PR_URL
+**Preview URL:** $PREVIEW_URL
+**Build repo:** https://github.com/${buildRepo}
+**Branch:** $BRANCH_NAME
+**Changes:** ${issue.title}
+
+_PR will be auto-merged after QA and UAT approval._"
 gh issue edit ${issue.number} --repo ${ctx.env.repo} --remove-label "station:design" --add-label "station:build"
 \`\`\`
 
 ## Critical rules
+- **Push to feature branch, NEVER to main directly**
+- **Open a PR — do NOT merge it** (QA/UAT will handle approval and merge)
 - Screenshots go in /tmp/ only (never repo root)
 - This is a CHANGE REQUEST — modify existing code, do not rearchitect
 - Confirm: BUILD complete for change request issue #${issue.number}`,
@@ -519,24 +545,7 @@ fi
 echo "TypeScript check passed"
 \`\`\`
 
-### 8. Deploy
-\`\`\`bash
-DEPLOY_OUT=$(vercel --prod --yes 2>&1)
-DEPLOY_EXIT=$?
-echo "$DEPLOY_OUT" | tail -15
-if [ $DEPLOY_EXIT -ne 0 ]; then
-  echo "DEPLOY FAILED (exit $DEPLOY_EXIT)"
-  gh issue comment ${issue.number} --repo ${ctx.env.repo} \\
-    --body "## BUILD FAILED\\n\\nDeploy exited with code $DEPLOY_EXIT."
-  exit 1
-fi
-LIVE_URL=$(vercel list 2>/dev/null | head -3 | grep -oP 'https://[\\S]+\\.vercel\\.app' | head -1)
-echo "Deploy succeeded: $LIVE_URL"
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$LIVE_URL" --max-time 20)
-echo "Home page HTTP: $HTTP_STATUS"
-\`\`\`
-
-### 9. Ensure code is in a GitHub repo (MANDATORY)
+### 8. Ensure code is in a GitHub repo (MANDATORY)
 If \`$BUILD_REPO\` is empty or not set, you MUST create a GitHub repo and push the code:
 \`\`\`bash
 if [ -z "$BUILD_REPO" ]; then
@@ -545,9 +554,9 @@ if [ -z "$BUILD_REPO" ]; then
   BUILD_REPO="${owner}/$SLUG"
 fi
 \`\`\`
-**Every build MUST have a GitHub repo.** Deploying only to Vercel from a temp directory is NOT acceptable — the code must be version-controlled and accessible for future change requests.
+**Every build MUST have a GitHub repo.** Deploying only to Vercel from a temp directory is NOT acceptable.
 
-### 10. Generate CLAUDE.md (project memory for future agents)
+### 9. Generate CLAUDE.md (project memory for future agents)
 Create a \`CLAUDE.md\` file in the repo root that captures everything a future agent needs to know about this project. This is critical for Change Request builds — the next agent will read this first.
 
 \`\`\`bash
@@ -593,24 +602,68 @@ cat > CLAUDE.md << 'CLAUDE_EOF'
 CLAUDE_EOF
 \`\`\`
 
-**IMPORTANT:** Replace all placeholders with actual values from your build. Be specific and detailed — this file is the project's memory. Then commit it:
+**IMPORTANT:** Replace all placeholders with actual values from your build. Be specific and detailed — this file is the project's memory.
+
+### 10. Commit to feature branch + push + open PR
 \`\`\`bash
-git add CLAUDE.md
-git commit -m "docs: add CLAUDE.md project context for future agents"
-git push origin main
+cd /tmp/build-work
+BRANCH_NAME="feature/issue-${issue.number}"
+git checkout -b "$BRANCH_NAME" 2>/dev/null || git checkout "$BRANCH_NAME"
+git add -A
+git commit -m "feat(#${issue.number}): ${issue.title}"
+git push origin "$BRANCH_NAME"
+
+# Deploy preview (not production — PR-based flow)
+PREVIEW_URL=$(vercel --yes 2>&1 | grep -oP 'https://[\\S]+\\.vercel\\.app' | head -1)
+echo "Preview URL: $PREVIEW_URL"
+
+# Open PR against main
+PR_URL=$(gh pr create \\
+  --repo $BUILD_REPO \\
+  --base main \\
+  --head "$BRANCH_NAME" \\
+  --title "feat(#${issue.number}): ${issue.title}" \\
+  --body "## New Build — Issue #${issue.number}
+
+**Source:** ${ctx.env.repo}#${issue.number}
+**Template:** ${template.repo}
+**Preview:** $PREVIEW_URL
+
+### What was built
+- [List key features implemented from spec]
+
+### Stack
+- [List frameworks and services used]
+
+---
+*Automated PR from Factory Pipeline. QA and UAT will review before merge to production.*" 2>&1)
+echo "PR created: $PR_URL"
+PR_NUMBER=$(echo "$PR_URL" | grep -oP '\\d+$')
+
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PREVIEW_URL" --max-time 20)
+echo "Preview HTTP status: $HTTP_STATUS"
 \`\`\`
 
 ### 11. Post BUILD COMPLETE comment + flip label
 \`\`\`bash
-gh issue comment ${issue.number} --repo ${ctx.env.repo} --body "## BUILD COMPLETE\\n\\nLive URL: $LIVE_URL\\nBuild repo: https://github.com/$BUILD_REPO\\nTemplate used: ${template.repo}"
+gh issue comment ${issue.number} --repo ${ctx.env.repo} --body "## BUILD COMPLETE
+
+**PR:** $PR_URL
+**Preview URL:** $PREVIEW_URL
+**Build repo:** https://github.com/$BUILD_REPO
+**Branch:** $BRANCH_NAME
+**Template:** ${template.repo}
+
+_PR will be auto-merged after QA and UAT approval._"
 gh issue edit ${issue.number} --repo ${ctx.env.repo} --remove-label "station:design" --add-label "station:build"
 \`\`\`
 
 ## Critical rules
+- **Push to feature branch, NEVER to main directly**
+- **Open a PR — do NOT merge it** (QA/UAT will handle approval and merge)
 - **Every build MUST push to a GitHub repo** — no temp-only deployments
 - **Every build MUST generate CLAUDE.md** — project memory is mandatory
 - Screenshots go in /tmp/ only (never repo root)
-- NEVER push directly to client repo
 - Template already has boilerplate — build PRODUCT features, not infrastructure
 - Confirm: BUILD complete for issue #${issue.number}`,
     };

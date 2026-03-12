@@ -121,17 +121,42 @@ export class QAStation extends BaseStation {
             issueTitle: issue.title,
             model: 'haiku',
             message: `You are a QA agent for the factory pipeline.
-**Goal: Smoke test the live app in under 15 minutes. Fast pass/fail. No gold-plating.**
+**Goal: Review the PR diff + smoke test the preview deploy in under 15 minutes. Fast pass/fail.**
 
-═══ STEP 1: GET LIVE URL ═══
+═══ STEP 1: GET PR AND PREVIEW URL ═══
 
 \`\`\`bash
-gh issue view ${issue.number} --repo ${ctx.env.repo} --comments | grep -E "https://[a-z0-9-]+\\.vercel\\.app" | head -3
+# Read build complete comment to find PR and preview URL
+gh issue view ${issue.number} --repo ${ctx.env.repo} --comments | grep -E "PR:|Preview URL:|Build repo:" | head -5
+
+# Extract PR URL and preview URL
+BUILD_COMMENTS=$(gh issue view ${issue.number} --repo ${ctx.env.repo} --comments)
+PR_URL=$(echo "$BUILD_COMMENTS" | grep -oP 'https://github\\.com/[\\w.-]+/[\\w.-]+/pull/\\d+' | head -1)
+PREVIEW_URL=$(echo "$BUILD_COMMENTS" | grep -oP 'https://[a-z0-9-]+\\.vercel\\.app' | head -1)
+BUILD_REPO=$(echo "$BUILD_COMMENTS" | grep -oP 'Build repo: https://github\\.com/\\K[\\w.-]+/[\\w.-]+' | head -1)
+BRANCH_NAME=$(echo "$BUILD_COMMENTS" | grep -oP 'Branch: \\K[\\w./-]+' | head -1)
+
+echo "PR: $PR_URL"
+echo "Preview: $PREVIEW_URL"
+echo "Build repo: $BUILD_REPO"
+echo "Branch: $BRANCH_NAME"
 \`\`\`
 
-Set LIVE_URL to the Vercel URL from the BUILD COMPLETE comment.
+Set LIVE_URL to the Preview URL (NOT production). If no preview, fall back to production URL.
+For internal issues, use: ${ctx.env.factoryAppUrl}
 
-For internal issues (no LIVE_URL), use: ${ctx.env.factoryAppUrl}
+═══ STEP 1b: REVIEW PR DIFF ═══
+
+\`\`\`bash
+# Review the PR diff to understand what changed
+if [ -n "$BUILD_REPO" ] && [ -n "$BRANCH_NAME" ]; then
+  gh pr diff "$BRANCH_NAME" --repo "$BUILD_REPO" 2>/dev/null | head -200
+  echo "---"
+  gh pr view "$BRANCH_NAME" --repo "$BUILD_REPO" --json files --jq '.files[].path' 2>/dev/null
+fi
+\`\`\`
+
+Note which files changed — focus your testing on the affected areas.
 
 ═══ STEP 2: HEALTH CHECK ═══
 
@@ -234,14 +259,20 @@ cat > /tmp/qa-report-${issue.number}.md << 'EOF'
 EOF
 
 gh issue comment ${issue.number} --repo ${ctx.env.repo} --body "$(cat /tmp/qa-report-${issue.number}.md)"
-gh issue edit ${issue.number} --repo ${ctx.env.repo} --remove-label "station:qa" --remove-label "station:build" --add-label "station:done"
+
+# Approve the PR if we found one
+if [ -n "$BUILD_REPO" ] && [ -n "$BRANCH_NAME" ]; then
+  gh pr review "$BRANCH_NAME" --repo "$BUILD_REPO" --approve --body "✅ QA PASS — technical review approved. Forwarding to UAT for user acceptance testing." 2>/dev/null || echo "PR review failed (may need write access)"
+fi
+
+gh issue edit ${issue.number} --repo ${ctx.env.repo} --remove-label "station:qa" --remove-label "station:build" --add-label "station:qa"
 
 curl -s -X PATCH \\
   "${SUPABASE_URL}/rest/v1/submissions?github_issue_url=ilike.*%2Fissues%2F${issue.number}" \\
   -H "apikey: ${SUPABASE_SERVICE_KEY}" \\
   -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \\
   -H "Content-Type: application/json" \\
-  -d '{"station":"done"}'
+  -d '{"station":"qa"}'
 \`\`\`
 
 ### IF CRITICAL ACs FAIL OR CLIENT_SIDE_FAIL=1:

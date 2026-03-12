@@ -88,6 +88,7 @@ export class StationRegistry {
     const { BuildStation } = await import('./build/index.js');
     const { QAStation } = await import('./qa/index.js');
     const { BugfixStation } = await import('./bugfix/index.js');
+    const { UATStation } = await import('./uat/index.js');
 
     // Content pipeline stations
     const { ResearchStation } = await import('./research/index.js');
@@ -102,6 +103,7 @@ export class StationRegistry {
     registry.register(new DesignStation());
     registry.register(new BuildStation());
     registry.register(new QAStation());
+    registry.register(new UATStation());
     registry.register(new BugfixStation());
 
     // ── Content pipeline ──

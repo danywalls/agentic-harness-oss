@@ -52,10 +52,14 @@ gh issue view ${issue.number} --repo ${ctx.env.repo} --comments
 
 Find the most recent QA RESULTS comment. Note every FAIL criterion.
 
-### 2. Clone the build repo
+### 2. Clone the build repo + checkout feature branch
 \`\`\`bash
 git clone https://github.com/${buildRepo ?? 'BUILD_REPO_HERE'} /tmp/bugfix-work
 cd /tmp/bugfix-work
+
+# Checkout the existing feature branch (bugs are fixed on the PR branch, not main)
+BRANCH_NAME="feature/issue-${issue.number}"
+git checkout "$BRANCH_NAME" 2>/dev/null || git checkout -b "$BRANCH_NAME"
 \`\`\`
 
 ### 3. Fix each failing acceptance criterion
@@ -84,12 +88,12 @@ If CLAUDE.md exists, append the bugs you found and fixed to the "Known Issues & 
 cd /tmp/bugfix-work
 git add -A
 git commit -m "bugfix(#${issue.number}): fix QA failures"
-git push origin main
+git push origin "$BRANCH_NAME"
 
-# Redeploy
-vercel --prod --yes --token $VERCEL_TOKEN 2>&1 | tail -5
-LIVE_URL=$(vercel list --token $VERCEL_TOKEN 2>/dev/null | head -3 | grep -oP 'https://[\\S]+\\.vercel\\.app' | head -1)
-echo "Redeployed: $LIVE_URL"
+# Redeploy preview (not production — still on feature branch)
+vercel --yes 2>&1 | tail -5
+PREVIEW_URL=$(vercel list 2>/dev/null | grep -oP 'https://[\\S]+\\.vercel\\.app' | head -1)
+echo "Preview redeployed: $PREVIEW_URL"
 \`\`\`
 
 ### 6. Post BUGFIX COMPLETE comment + flip label

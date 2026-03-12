@@ -35,7 +35,7 @@
           "nextLabel": "station:build"
         },
         {
-          "stationId": "qa",
+          "stationId": "uat",
           "label": "station:qa",
           "nextLabel": "station:done"
         }
