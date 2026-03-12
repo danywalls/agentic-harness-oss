@@ -452,13 +452,25 @@ HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$LIVE_URL" --max-time 20)
 echo "Home page HTTP: $HTTP_STATUS"
 \`\`\`
 
-### 9. Post BUILD COMPLETE comment + flip label
+### 9. Ensure code is in a GitHub repo (MANDATORY)
+If \`$BUILD_REPO\` is empty or not set, you MUST create a GitHub repo and push the code:
+\`\`\`bash
+if [ -z "$BUILD_REPO" ]; then
+  SLUG=$(echo "${issue.title}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | head -c 40)
+  gh repo create ${owner}/$SLUG --private --source=. --push
+  BUILD_REPO="${owner}/$SLUG"
+fi
+\`\`\`
+**Every build MUST have a GitHub repo.** Deploying only to Vercel from a temp directory is NOT acceptable — the code must be version-controlled and accessible for future change requests.
+
+### 10. Post BUILD COMPLETE comment + flip label
 \`\`\`bash
 gh issue comment ${issue.number} --repo ${ctx.env.repo} --body "## BUILD COMPLETE\\n\\nLive URL: $LIVE_URL\\nBuild repo: https://github.com/$BUILD_REPO\\nTemplate used: ${template.repo}"
 gh issue edit ${issue.number} --repo ${ctx.env.repo} --remove-label "station:design" --add-label "station:build"
 \`\`\`
 
 ## Critical rules
+- **Every build MUST push to a GitHub repo** — no temp-only deployments
 - Screenshots go in /tmp/ only (never repo root)
 - NEVER push directly to client repo
 - Template already has boilerplate — build PRODUCT features, not infrastructure
