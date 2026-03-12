@@ -72,7 +72,8 @@ fi
 echo "✅ TypeScript OK"
 \`\`\`
 
-### 5. Push fixes + redeploy
+### 5. Update CLAUDE.md with bug learnings
+If CLAUDE.md exists, append the bugs you found and fixed to the "Known Issues & Gotchas" section. This prevents future agents from introducing the same bugs.
 \`\`\`bash
 cd /tmp/bugfix-work
 git add -A

@@ -224,6 +224,16 @@ cd /tmp/build-work
 git remote set-url origin "$CLONE_URL"
 \`\`\`
 
+### 2b. Read CLAUDE.md (project memory — CRITICAL)
+\`\`\`bash
+if [ -f CLAUDE.md ]; then
+  echo "=== PROJECT CONTEXT ==="
+  cat CLAUDE.md
+  echo "======================="
+fi
+\`\`\`
+**If CLAUDE.md exists, READ IT FIRST.** It contains architecture decisions, known gotchas, env vars, and key file locations from the original build. Follow its guidance.
+
 ### 3. Extract DESIGN.md from the issue (change-focused spec)
 \`\`\`bash
 gh issue view ${issue.number} --repo ${ctx.env.repo} --comments \\
@@ -250,9 +260,9 @@ fi
 echo "TypeScript check passed"
 \`\`\`
 
-### 5. Push changes to build repo
+### 5. Update CLAUDE.md with changes
+If CLAUDE.md exists, update the "Known Issues & Gotchas" and "Change Request Notes" sections with anything you learned during this change. If it doesn't exist, create one (follow the template from new builds).
 \`\`\`bash
-cd /tmp/build-work
 git add -A
 git commit -m "change: ${issue.title}"
 git push origin main
@@ -529,7 +539,60 @@ fi
 \`\`\`
 **Every build MUST have a GitHub repo.** Deploying only to Vercel from a temp directory is NOT acceptable — the code must be version-controlled and accessible for future change requests.
 
-### 10. Post BUILD COMPLETE comment + flip label
+### 10. Generate CLAUDE.md (project memory for future agents)
+Create a \`CLAUDE.md\` file in the repo root that captures everything a future agent needs to know about this project. This is critical for Change Request builds — the next agent will read this first.
+
+\`\`\`bash
+cat > CLAUDE.md << 'CLAUDE_EOF'
+# CLAUDE.md — Project Context
+
+## Project
+- **Name:** [PROJECT_NAME from spec]
+- **Description:** [One-line description]
+- **Live URL:** [Vercel URL]
+- **Build Repo:** [GitHub repo URL]
+- **Issue:** [Link to original GitHub issue]
+
+## Stack
+- [List all frameworks, libraries, and services used]
+- [e.g., Next.js 14 (App Router), Supabase (Auth + DB + Realtime), Vercel, Tailwind CSS, shadcn/ui]
+
+## Architecture
+- [Key architecture decisions from the spec/design]
+- [API structure, auth model, database schema overview]
+- [Any non-obvious patterns (e.g., "admin routes use use(params) for Next.js 15 compat")]
+
+## Environment Variables
+- [List all required env vars with descriptions (NOT values)]
+- [e.g., NEXT_PUBLIC_SUPABASE_URL — Supabase project URL]
+
+## Database
+- [List tables with brief descriptions]
+- [Note any RLS policies, triggers, or functions]
+- [Migration naming convention]
+
+## Key Files
+- [Map of important files and what they do]
+- [e.g., src/app/api/sync/route.ts — GitHub → Supabase sync endpoint]
+
+## Known Issues & Gotchas
+- [Any quirks, workarounds, or things that tripped you up during the build]
+- [e.g., "dash_issues.id is bigint, not UUID — must provide explicitly on insert"]
+
+## Change Request Notes
+- [Guidelines for modifying this project]
+- [What to be careful about when adding features]
+CLAUDE_EOF
+\`\`\`
+
+**IMPORTANT:** Replace all placeholders with actual values from your build. Be specific and detailed — this file is the project's memory. Then commit it:
+\`\`\`bash
+git add CLAUDE.md
+git commit -m "docs: add CLAUDE.md project context for future agents"
+git push origin main
+\`\`\`
+
+### 11. Post BUILD COMPLETE comment + flip label
 \`\`\`bash
 gh issue comment ${issue.number} --repo ${ctx.env.repo} --body "## BUILD COMPLETE\\n\\nLive URL: $LIVE_URL\\nBuild repo: https://github.com/$BUILD_REPO\\nTemplate used: ${template.repo}"
 gh issue edit ${issue.number} --repo ${ctx.env.repo} --remove-label "station:design" --add-label "station:build"
@@ -537,6 +600,7 @@ gh issue edit ${issue.number} --repo ${ctx.env.repo} --remove-label "station:des
 
 ## Critical rules
 - **Every build MUST push to a GitHub repo** — no temp-only deployments
+- **Every build MUST generate CLAUDE.md** — project memory is mandatory
 - Screenshots go in /tmp/ only (never repo root)
 - NEVER push directly to client repo
 - Template already has boilerplate — build PRODUCT features, not infrastructure
