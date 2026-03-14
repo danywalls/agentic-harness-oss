@@ -235,6 +235,14 @@ async function main() {
   ${pc.cyan(pc.bold('SPEC'))} ${pc.dim('→')} ${pc.blue(pc.bold('DESIGN'))} ${pc.dim('→')} ${pc.magenta(pc.bold('BUILD'))} ${pc.dim('→')} ${pc.yellow(pc.bold('QA'))} ${pc.dim('→')} ${pc.green(pc.bold('DONE'))}
   `);
 
+  const isReset = process.argv.includes('--reset');
+
+  if (isReset) {
+    try { await fs.unlink(path.join(REPO_ROOT, 'factory', 'config.json')); } catch {}
+    try { await fs.unlink(path.join(REPO_ROOT, '.env')); } catch {}
+    note('Previous configuration wiped safely.', '🧹 Factory Reset Triggered');
+  }
+
   await checkDependencies();
 
   await handleFiles();
