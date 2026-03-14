@@ -328,13 +328,6 @@ async function main() {
     await setupGithubLabels(repo as string);
   }
 
-  note(
-    `${pc.cyan('1.')} Your keys have been securely saved to ${pc.cyan('.env')}\n` +
-    `${pc.cyan('2.')} Your harness settings are in ${pc.cyan('factory/config.json')}\n` +
-    `${pc.cyan('3.')} To deploy from scratch anytime, run: ${pc.cyan(pc.bold('npm run dev'))}`,
-    '✨ You are ready to go!'
-  );
-
   const testIssue = await confirm({
     message: `Do you want to queue your first agent task now? ${pc.dim('(Creates a "Todo App" issue)')}`,
     initialValue: true,
@@ -351,9 +344,16 @@ async function main() {
   }
 
   const startNow = await confirm({
-    message: 'Do you want to start the factory loop now? (It will keep running in this terminal)',
+    message: `Do you want to start the factory loop now? ${pc.dim(`(Runs ${pc.cyan('npm run dev')})`)}`,
     initialValue: true,
   });
+
+  note(
+    `${pc.cyan('1.')} Your keys have been securely saved to ${pc.cyan('.env')}\n` +
+    `${pc.cyan('2.')} Your harness settings are in ${pc.cyan('factory/config.json')}\n` +
+    `${pc.cyan('3.')} To deploy from scratch anytime, run: ${pc.cyan(pc.bold('npm run dev'))}`,
+    '✨ You are ready to go!'
+  );
 
   if (startNow && !isCancel(startNow)) {
     outro(pc.green('Starting the factory loop... 🚀'));
