@@ -1,7 +1,7 @@
 import { intro, outro, text, select, confirm, spinner, isCancel, cancel, note } from '@clack/prompts';
 import picocolors from 'picocolors';
 import pc from 'picocolors';
-import { exec, spawn } from 'node:child_process';
+import { exec, spawn, execSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -69,26 +69,26 @@ async function checkDependencies() {
       });
 
       if (installGh && !isCancel(installGh)) {
-        s.start(`Installing GitHub CLI for ${osName}...`);
+        s.stop(pc.cyan(`Installing GitHub CLI for ${osName}... (You might be prompted for your password)`));
         try {
           if (process.platform === 'darwin') {
-            await execAsync('brew install gh');
+            execSync('brew install gh', { stdio: 'inherit' });
           } else if (process.platform === 'win32') {
             try {
-               await execAsync('winget install --id GitHub.cli');
+               execSync('winget install --id GitHub.cli', { stdio: 'inherit' });
             } catch {
-               await execAsync('choco install gh -y');
+               execSync('choco install gh -y', { stdio: 'inherit' });
             }
           } else {
             // For linux, try brew first, fallback to apt-get
             try {
-              await execAsync('brew install gh');
+              execSync('brew install gh', { stdio: 'inherit' });
             } catch {
-              await execAsync('sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y');
+              execSync('sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y', { stdio: 'inherit' });
             }
           }
           ghInstalled = true;
-          s.stop(pc.green('✔ GitHub CLI installed successfully!'));
+          s.start('✔ GitHub CLI installed successfully! Resuming...');
         } catch (e) {
           throw new Error(`Failed to install gh automatically. Please install from: ${pc.cyan('https://cli.github.com')}`);
         }
