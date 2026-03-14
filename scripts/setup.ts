@@ -58,17 +58,27 @@ async function checkDependencies() {
     } catch {}
 
     if (!ghInstalled) {
-      s.stop(pc.yellow('GitHub CLI (gh) not found.'));
+      s.stop(pc.yellow('  GitHub CLI (gh) not found.'));
+      
+      const osName = process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : 'Linux';
+      const pkgManagers = process.platform === 'darwin' ? 'Homebrew' : process.platform === 'win32' ? 'winget / choco' : 'apt-get / Homebrew';
+
       const installGh = await confirm({
-        message: 'GitHub CLI is required but not installed. Do you want to try installing it automatically? (Supports Homebrew / apt-get)',
+        message: `GitHub CLI is required but not installed. Do you want to try installing it automatically on ${pc.bold(osName)}? ${pc.dim(`(Uses ${pkgManagers})`)}`,
         initialValue: true,
       });
 
       if (installGh && !isCancel(installGh)) {
-        s.start('Installing GitHub CLI...');
+        s.start(`Installing GitHub CLI for ${osName}...`);
         try {
           if (process.platform === 'darwin') {
             await execAsync('brew install gh');
+          } else if (process.platform === 'win32') {
+            try {
+               await execAsync('winget install --id GitHub.cli');
+            } catch {
+               await execAsync('choco install gh -y');
+            }
           } else {
             // For linux, try brew first, fallback to apt-get
             try {
@@ -78,6 +88,7 @@ async function checkDependencies() {
             }
           }
           ghInstalled = true;
+          s.stop(pc.green('✔ GitHub CLI installed successfully!'));
         } catch (e) {
           throw new Error(`Failed to install gh automatically. Please install from: ${pc.cyan('https://cli.github.com')}`);
         }
