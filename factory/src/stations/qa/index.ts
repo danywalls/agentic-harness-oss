@@ -358,7 +358,7 @@ gh issue create --repo ${ctx.env.repo} \\
 **Steps to reproduce:** ...
 **Expected:** ...
 **Actual:** ..." \\
-  --label "type:bug"
+  --label "type:bug" --label "station:intake"
 
 gh issue edit ${issue.number} --repo ${ctx.env.repo} \\
   --remove-label "station:qa" --remove-label "station:build" --add-label "station:bugfix"
