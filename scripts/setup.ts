@@ -59,27 +59,30 @@ async function checkDependencies() {
 
     if (!ghInstalled) {
       s.stop(pc.yellow('GitHub CLI (gh) not found.'));
-      const isMac = process.platform === 'darwin';
-      
-      if (isMac) {
-        const installGh = await confirm({
-          message: 'GitHub CLI is required but not installed. Do you want to try installing it via Homebrew?',
-          initialValue: true,
-        });
+      const installGh = await confirm({
+        message: 'GitHub CLI is required but not installed. Do you want to try installing it automatically? (Supports Homebrew / apt-get)',
+        initialValue: true,
+      });
 
-        if (installGh && !isCancel(installGh)) {
-          s.start('Installing GitHub CLI (brew install gh)...');
-          try {
+      if (installGh && !isCancel(installGh)) {
+        s.start('Installing GitHub CLI...');
+        try {
+          if (process.platform === 'darwin') {
             await execAsync('brew install gh');
-            ghInstalled = true;
-          } catch (e) {
-            throw new Error(`Failed to install gh via brew. Please install from: ${pc.cyan('https://cli.github.com')}`);
+          } else {
+            // For linux, try brew first, fallback to apt-get
+            try {
+              await execAsync('brew install gh');
+            } catch {
+              await execAsync('sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y');
+            }
           }
-        } else {
-          throw new Error(`Install gh manually from ${pc.cyan('https://cli.github.com')}`);
+          ghInstalled = true;
+        } catch (e) {
+          throw new Error(`Failed to install gh automatically. Please install from: ${pc.cyan('https://cli.github.com')}`);
         }
       } else {
-         throw new Error(`GitHub CLI not found. Please install manually from ${pc.cyan('https://cli.github.com')}`);
+        throw new Error(`Install gh manually from ${pc.cyan('https://cli.github.com')}`);
       }
     }
 
@@ -92,15 +95,30 @@ async function checkDependencies() {
         authSuccess = true;
       } catch {
         s.stop(pc.yellow('GitHub CLI is not authenticated.'));
-        const authNow = await confirm({
-          message: `Please open a new terminal, run ${pc.cyan('gh auth login')}, and then press Enter here once done. Ready?`,
-          initialValue: true
-        });
         
-        if (!authNow || isCancel(authNow)) {
-          throw new Error(`You must authenticate with GitHub CLI first. Run: ${pc.cyan('gh auth login')}`);
+        note(
+          'To authenticate GitHub CLI, please create a Personal Access Token (classic) with "repo", "read:org", and "workflow" scopes at:\n' + 
+          pc.cyan('https://github.com/settings/tokens'), 
+          'GitHub Token required'
+        );
+
+        const ghToken = await text({
+          message: 'Paste your GitHub Personal Access Token (ghp_...):',
+          placeholder: 'ghp_...'
+        });
+
+        if (isCancel(ghToken) || !ghToken) {
+          throw new Error(`Authentication cancelled. You must run ${pc.cyan('gh auth login')} manually later.`);
         }
-        s.start('Re-checking GitHub authentication...');
+
+        s.start('Authenticating GitHub CLI...');
+        try {
+          await execAsync(`echo "${ghToken}" | gh auth login --with-token`);
+          authSuccess = true;
+          s.start('Re-checking GitHub dependencies...');
+        } catch (e: any) {
+          s.stop(pc.red('Failed to authenticate with that token. Please try again.'));
+        }
       }
     }
 
