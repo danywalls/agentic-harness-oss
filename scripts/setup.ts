@@ -94,17 +94,17 @@ async function checkDependencies() {
         await execAsync('gh auth status');
         authSuccess = true;
       } catch {
-        s.stop(pc.yellow('GitHub CLI is not authenticated.'));
+        s.stop(pc.yellow('  GitHub CLI is not authenticated.'));
         
         note(
-          'To authenticate GitHub CLI, please create a Personal Access Token (classic) with "repo", "read:org", and "workflow" scopes at:\n' + 
-          pc.cyan('https://github.com/settings/tokens'), 
-          'GitHub Token required'
+          `To authenticate GitHub CLI, please create a Personal Access Token (classic)\nwith ${pc.bold('repo')}, ${pc.bold('read:org')}, and ${pc.bold('workflow')} scopes at:\n` + 
+          pc.cyan(pc.underline('https://github.com/settings/tokens')), 
+          '🔑 GitHub Token required'
         );
 
         const ghToken = await text({
-          message: 'Paste your GitHub Personal Access Token (ghp_...):',
-          placeholder: 'ghp_...'
+          message: 'Paste your GitHub Personal Access Token:',
+          placeholder: 'ghp_...',
         });
 
         if (isCancel(ghToken) || !ghToken) {
@@ -117,14 +117,14 @@ async function checkDependencies() {
           authSuccess = true;
           s.start('Re-checking GitHub dependencies...');
         } catch (e: any) {
-          s.stop(pc.red('Failed to authenticate with that token. Please try again.'));
+          s.stop(pc.red('  Failed to authenticate with that token. Please try again.'));
         }
       }
     }
 
-    s.stop(pc.green('All dependencies are installed and authenticated!'));
+    s.stop(pc.green('✔ All dependencies are installed and authenticated!'));
   } catch (error: any) {
-    s.stop(pc.red('Dependency check failed.'));
+    s.stop(pc.red('✖ Dependency check failed.'));
     cancel(error.message);
     process.exit(1);
   }
@@ -217,7 +217,12 @@ async function updateEnvAndConfig(repo: string, apiKey: string) {
 async function main() {
   console.clear();
   
-  intro(`${pc.bgBlue(pc.white(' agentic-harness installer '))} \n${pc.dim('SPEC → DESIGN → BUILD → QA → DONE')}`);
+  intro(`
+  ${pc.bgCyan(pc.black(' 🏭 agentic-harness installer '))}
+  ${pc.dim('The autonomous software factory.')}
+  
+  ${pc.cyan(pc.bold('SPEC'))} ${pc.dim('→')} ${pc.blue(pc.bold('DESIGN'))} ${pc.dim('→')} ${pc.magenta(pc.bold('BUILD'))} ${pc.dim('→')} ${pc.yellow(pc.bold('QA'))} ${pc.dim('→')} ${pc.green(pc.bold('DONE'))}
+  `);
 
   await checkDependencies();
 
@@ -239,28 +244,28 @@ async function main() {
 
   if (currentRepo && currentRepo !== 'owner/your-repo' && currentKey && currentKey.startsWith('sk-ant')) {
     const shouldOverwrite = await confirm({
-      message: `It looks like agentic-harness is already configured for ${pc.cyan(currentRepo)}. Do you want to overwrite the current configuration?`,
+      message: `It looks like agentic-harness is already configured for ${pc.cyan(currentRepo)}.\n  Do you want to overwrite the current configuration?`,
       initialValue: false,
     });
 
     if (isCancel(shouldOverwrite)) {
-      cancel('Operation cancelled.');
+      cancel('Operation cancelled. Let\'s build later!');
       process.exit(0);
     }
     
     if (!shouldOverwrite) {
-      outro(pc.green('Configuration left unchanged. ✅ agentic-harness is ready!'));
+      outro(pc.green('✔ Configuration left unchanged. You are good to go! 🚀'));
       process.exit(0);
     }
   }
 
   const repo = await text({
-    message: 'What is your GitHub repository? (e.g. owner/repo)',
+    message: `Where should the agents work? ${pc.dim('(GitHub Repository)')}`,
     placeholder: 'owner/repo',
     initialValue: currentRepo && currentRepo !== 'owner/your-repo' ? currentRepo : undefined,
     validate(value) {
-      if (!value || value.length === 0) return 'Repository is required!';
-      if (!value.includes('/')) return 'Please format as owner/repo';
+      if (!value || value.length === 0) return 'Hmm, I really need a repository to work in.';
+      if (!value.includes('/')) return 'Format should be: owner/repo (e.g. danywalls/my-app)';
     },
   });
 
@@ -270,11 +275,11 @@ async function main() {
   }
 
   const apiKey = await text({
-    message: 'What is your Anthropic API key? (sk-ant-... or sk-ant-oat01-...)',
+    message: `What is your Anthropic API Key? ${pc.dim('(Required for Claude)')}`,
     placeholder: 'sk-ant-...',
     initialValue: currentKey && currentKey.startsWith('sk-ant') ? currentKey : undefined,
     validate(value) {
-      if (!value || value.length === 0) return 'API key is required!';
+      if (!value || value.length === 0) return 'Claude needs an API key to think!';
     },
   });
 
@@ -284,7 +289,7 @@ async function main() {
   }
 
   const setupLabels = await confirm({
-    message: 'Do you want to automatically set up the required GitHub labels in this repository?',
+    message: `Should I create the required issue labels via ${pc.bold('gh')} in your repo automatically?`,
     initialValue: true,
   });
 
@@ -296,20 +301,21 @@ async function main() {
   const sFiles = spinner();
   sFiles.start('Writing configuration files...');
   await updateEnvAndConfig(repo as string, apiKey as string);
-  sFiles.stop(pc.green('Configuration files written.'));
+  sFiles.stop(pc.green('✔ Configuration files written.'));
 
   if (setupLabels) {
     await setupGithubLabels(repo as string);
   }
 
   note(
-    `1. Review ${pc.cyan('.env')} and ${pc.cyan('factory/config.json')}\n` +
-    `2. Create an issue in GitHub with the label 'station:intake' to trigger a pipeline!`,
-    'Next steps'
+    `${pc.cyan('1.')} Your keys have been securely saved to ${pc.cyan('.env')}\n` +
+    `${pc.cyan('2.')} Your harness settings are in ${pc.cyan('factory/config.json')}\n` +
+    `${pc.cyan('3.')} To deploy from scratch anytime, run: ${pc.cyan(pc.bold('npm run dev'))}`,
+    '✨ You are ready to go!'
   );
 
   const testIssue = await confirm({
-    message: 'Do you want to create your first example issue now? (A simple "Todo App" task)',
+    message: `Do you want to queue your first agent task now? ${pc.dim('(Creates a "Todo App" issue)')}`,
     initialValue: true,
   });
 
@@ -318,9 +324,9 @@ async function main() {
     sIssue.start('Creating example issue on GitHub...');
     try {
       await execAsync(`gh issue create --repo ${repo} --title "Build a simple todo app with auth" --body "A task management app. Users can sign up, create todos, mark them done. Deploy to Vercel." --label "station:intake"`);
-      sIssue.stop(pc.green('Example issue created with label "station:intake"!'));
+      sIssue.stop(pc.green('✔ Example issue created!'));
     } catch (e: any) {
-      sIssue.stop(pc.yellow('Failed to create example issue (maybe check your gh permissions).'));
+      sIssue.stop(pc.yellow('⚠ Failed to create example issue (check your gh permissions).'));
     }
   }
 
@@ -344,7 +350,7 @@ async function main() {
     return; // Prevent reaching the second outro
   }
 
-  outro(pc.green('✅ agentic-harness is ready!'));
+  outro(pc.green('✔ agentic-harness is ready! Happy building! 🏭'));
 }
 
 main().catch(console.error);
