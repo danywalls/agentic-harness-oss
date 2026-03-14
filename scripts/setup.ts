@@ -175,7 +175,7 @@ async function setupGithubLabels(repo: string) {
     "station:intake", "station:spec", "station:design", "station:build", 
     "station:qa", "station:uat", "station:bugfix", "station:done", "station:skip", 
     "station:blocked", "status:paused", "complexity:simple", "complexity:medium", 
-    "complexity:complex"
+    "complexity:complex", "type:internal"
   ];
 
   let successCount = 0;
@@ -342,7 +342,7 @@ async function main() {
     const sIssue = spinner();
     sIssue.start('Creating example issue on GitHub...');
     try {
-      await execAsync(`gh issue create --repo ${repo} --title "Build a simple todo app with auth" --body "A task management app. Users can sign up, create todos, mark them done. Deploy to Vercel." --label "station:intake"`);
+      await execAsync(`gh issue create --repo ${repo} --title "Build a simple todo app with auth" --body "A task management app. Users can sign up, create todos, mark them done. Deploy to Vercel." --label "station:intake" --label "type:internal"`);
       sIssue.stop(pc.green('✔ Example issue created!'));
     } catch (e: any) {
       sIssue.stop(pc.yellow('⚠ Failed to create example issue (check your gh permissions).'));
