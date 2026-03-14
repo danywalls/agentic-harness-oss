@@ -145,25 +145,17 @@ cd agentic-harness-oss
 npm install
 ```
 
-### 2. Configure
+### 2. Configure (Interactive)
 
 ```bash
-cp .env.example .env
-cp factory/config.example.json factory/config.json
-# Edit both files with your values
+npm run setup
 ```
 
-### 3. Create GitHub labels
-
-```bash
-REPO=owner/repo
-for label in "station:intake" "station:spec" "station:design" "station:build" \
-  "station:qa" "station:uat" "station:bugfix" "station:done" "station:skip" \
-  "station:blocked" "status:paused" "complexity:simple" "complexity:medium" \
-  "complexity:complex"; do
-  gh label create "$label" --repo $REPO 2>/dev/null || echo "exists: $label"
-done
-```
+This will launch a beautiful interactive terminal UI that will:
+1. Check that you have `node`, `claude`, and `gh` installed.
+2. Ask for your Anthropic API Key and GitHub repository.
+3. Automatically configure your `.env` and `factory/config.json`.
+4. Automatically create all the required GitHub labels (`station:spec`, `station:design`, etc.) in your repository.
 
 ### 4. Run
 
