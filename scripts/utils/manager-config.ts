@@ -83,14 +83,15 @@ export async function saveConfiguration(repo: string, apiKey: string, hasClaude 
     envContent += `\nGITHUB_REPO=${repo}`;
   }
 
-  // Clear existing uncommented keys to avoid duplicates
-  envContent = envContent.replace(/^ANTHROPIC_API_KEY=.*/gm, '# ANTHROPIC_API_KEY=');
-  envContent = envContent.replace(/^CLAUDE_CODE_OAUTH_TOKEN=.*/gm, '# CLAUDE_CODE_OAUTH_TOKEN=');
+  // Remove all existing key lines (commented or not) to avoid duplicates
+  envContent = envContent.replace(/^#?\s*ANTHROPIC_API_KEY=.*\n?/gm, '');
+  envContent = envContent.replace(/^#?\s*CLAUDE_CODE_OAUTH_TOKEN=.*\n?/gm, '');
 
+  // Append the correct key
   if (apiKey.startsWith('sk-ant-oat')) {
-    envContent = envContent.replace(/^#?\s*CLAUDE_CODE_OAUTH_TOKEN=.*/m, `CLAUDE_CODE_OAUTH_TOKEN=${apiKey}`);
+    envContent += `\nCLAUDE_CODE_OAUTH_TOKEN=${apiKey}`;
   } else {
-    envContent = envContent.replace(/^#?\s*ANTHROPIC_API_KEY=.*/m, `ANTHROPIC_API_KEY=${apiKey}`);
+    envContent += `\nANTHROPIC_API_KEY=${apiKey}`;
   }
 
   // Handle FACTORY_USE_CLAUDE
@@ -106,6 +107,8 @@ export async function saveConfiguration(repo: string, apiKey: string, hasClaude 
 }
 
 export async function wipeConfiguration(): Promise<void> {
-    try { await fs.unlink(path.join(REPO_ROOT, 'factory', 'config.json')); } catch {}
-    try { await fs.unlink(path.join(REPO_ROOT, '.env')); } catch {}
+    const configPath = path.join(REPO_ROOT, 'factory', 'config.json');
+    const envPath = path.join(REPO_ROOT, '.env');
+    try { await fs.rename(configPath, configPath + '.bak'); } catch {}
+    try { await fs.rename(envPath, envPath + '.bak'); } catch {}
 }

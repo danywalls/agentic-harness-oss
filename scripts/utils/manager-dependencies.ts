@@ -113,7 +113,14 @@ export async function authenticateGitHub(): Promise<void> {
       const s = spinner();
       s.start('Authenticating GitHub CLI...');
       try {
-        await execAsync(`echo "${ghToken}" | gh auth login --with-token`);
+        await new Promise<void>((resolve, reject) => {
+          const child = exec('gh auth login --with-token', (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+          child.stdin?.write(ghToken as string);
+          child.stdin?.end();
+        });
         authSuccess = true;
         s.stop(pc.green('✔ GitHub authenticated.'));
       } catch (e: any) {

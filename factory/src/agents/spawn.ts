@@ -42,10 +42,7 @@ export function spawnAgent(
   if (useClaudeCli) {
     // ── v2: Claude Code CLI (claude -p) ──────────────────────────────────
     const apiKey = getCurrentKey();
-    if (!task.model) {
-      throw new Error(`Station "${task.station}" has no model configured. Check config.json.`);
-    }
-    const model = task.model;
+    const model = task.model ?? 'claude-sonnet-4-6';
     const taskFd = openSync(taskFile, 'r');
     child = spawnProcess(
       CLAUDE_BIN,

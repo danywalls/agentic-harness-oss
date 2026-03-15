@@ -85,27 +85,38 @@ export class KeyManagerImpl implements KeyManager {
   }
 
   validateKey(): Promise<{ ok: boolean; reason?: string }> {
-    this.log(`🔑 Validating Claude CLI availability...`);
+    const apiKey = this.getCurrentKey();
+    const keyType = apiKey.startsWith('sk-ant-oat') ? 'OAuth' : 'API key';
+    this.log(`🔑 Validating ${keyType} (${apiKey.slice(0, 20)}...)`);
     return new Promise((resolve) => {
+      const isRoot = process.getuid?.() === 0;
+      const args = [
+        '-p',
+        '--model',
+        'claude-haiku-4-5',
+        '--output-format',
+        'json',
+        ...(isRoot ? [] : ['--dangerously-skip-permissions']),
+      ];
       const child = spawnProcess(
         this.claudeBin,
-        ['--version'],
-        { stdio: ['ignore', 'pipe', 'pipe'] },
+        args,
+        { env: this.buildAgentEnv(apiKey), stdio: ['pipe', 'pipe', 'pipe'] },
       );
       let out = '';
       if (child.stdout) child.stdout.on('data', (d: Buffer) => (out += d));
-      
+      if (child.stdin) child.stdin.end('Reply with exactly: OK');
       const timer = setTimeout(() => {
         child.kill('SIGKILL');
         resolve({ ok: false, reason: 'timeout' });
-      }, 10000);
-
+      }, 15000);
       child.on('close', (code: number | null) => {
         clearTimeout(timer);
-        if (code === 0) {
-          resolve({ ok: true, reason: out.trim() });
-        } else {
-          resolve({ ok: false, reason: `exit code ${code}` });
+        try {
+          const result = JSON.parse(out.trim().split('\n').pop() ?? '');
+          resolve({ ok: !result.is_error, reason: result.result?.slice(0, 80) });
+        } catch {
+          resolve({ ok: false, reason: `parse error (code ${code})` });
         }
       });
     });
