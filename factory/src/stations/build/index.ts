@@ -613,6 +613,11 @@ git config user.name "Abe Reyes"
 ### 3. Run the customize script with manifest values from the spec
 \`\`\`bash
 node scripts/customize.js --manifest='{"name":"PROJECT_NAME","description":"PROJECT_DESC","primaryColor":"#E86F2C"}'
+# Update build monitor: template customized
+[ -n "$BUILD_MONITOR_ID" ] && curl -s -X PATCH "${ctx.env.factoryAppUrl}/api/threads/$SUBMISSION_ID/push" \\
+  -H "Content-Type: application/json" \\
+  -H "x-factory-secret: ${ctx.env.factorySecret}" \\
+  -d "{\"messageId\":\"$BUILD_MONITOR_ID\",\"payload\":{\"type\":\"build_monitor\",\"status\":\"building\",\"station\":\"build\",\"progress\":10,\"activities\":[{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Template customized\"}]}}" 2>/dev/null || true
 \`\`\`
 
 ### 4. Extract DESIGN.md from the issue (PRIMARY UI REFERENCE)
@@ -622,6 +627,11 @@ gh issue view ${issue.number} --repo ${ctx.env.repo} --comments \\
   | grep -A 2000 "Design Philosophy" | head -500 > /tmp/design-issue-${issue.number}.md
 wc -l /tmp/design-issue-${issue.number}.md
 cat /tmp/design-issue-${issue.number}.md
+# Update build monitor: design loaded
+[ -n "$BUILD_MONITOR_ID" ] && curl -s -X PATCH "${ctx.env.factoryAppUrl}/api/threads/$SUBMISSION_ID/push" \\
+  -H "Content-Type: application/json" \\
+  -H "x-factory-secret: ${ctx.env.factorySecret}" \\
+  -d "{\"messageId\":\"$BUILD_MONITOR_ID\",\"payload\":{\"type\":\"build_monitor\",\"status\":\"building\",\"station\":\"build\",\"progress\":15,\"activities\":[{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Template customized\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Design spec loaded\"}]}}" 2>/dev/null || true
 \`\`\`
 
 **DESIGN.md is your PRIMARY UI reference.** Zero design decisions left to you.
@@ -635,6 +645,11 @@ gh issue view ${issue.number} --repo ${ctx.env.repo} --comments \\
 cd /tmp/build-work
 cp /tmp/migration-${issue.number}.sql supabase/migrations/$(date +%Y%m%d%H%M%S)_spec_schema.sql
 supabase db push --linked
+# Update build monitor: migrations applied
+[ -n "$BUILD_MONITOR_ID" ] && curl -s -X PATCH "${ctx.env.factoryAppUrl}/api/threads/$SUBMISSION_ID/push" \\
+  -H "Content-Type: application/json" \\
+  -H "x-factory-secret: ${ctx.env.factorySecret}" \\
+  -d "{\"messageId\":\"$BUILD_MONITOR_ID\",\"payload\":{\"type\":\"build_monitor\",\"status\":\"building\",\"station\":\"build\",\"progress\":20,\"activities\":[{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Template customized\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Design spec loaded\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Database migrations applied\"}]}}" 2>/dev/null || true
 \`\`\`
 
 ### 6. Read Impeccable design skill (MANDATORY for all UI work)
@@ -646,6 +661,14 @@ If not installed: \`npx skills install pbakaus/impeccable@frontend-design\`
 **Follow Impeccable principles in ALL UI implementation.** No generic AI aesthetics.
 
 ### 7. Implement all spec requirements on top of the template
+
+Before starting implementation, update the build monitor:
+\`\`\`bash
+[ -n "$BUILD_MONITOR_ID" ] && curl -s -X PATCH "${ctx.env.factoryAppUrl}/api/threads/$SUBMISSION_ID/push" \\
+  -H "Content-Type: application/json" \\
+  -H "x-factory-secret: ${ctx.env.factorySecret}" \\
+  -d "{\"messageId\":\"$BUILD_MONITOR_ID\",\"payload\":{\"type\":\"build_monitor\",\"status\":\"building\",\"station\":\"build\",\"progress\":25,\"activities\":[{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Template customized\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Design spec loaded\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Database migrations applied\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Implementing features...\"}]}}" 2>/dev/null || true
+\`\`\`
 
 Build every feature described in the spec. Follow the DESIGN.md for all visual decisions. Apply Impeccable design principles throughout.
 
