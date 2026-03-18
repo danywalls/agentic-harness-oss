@@ -233,6 +233,8 @@ CLONE_URL=$(curl -s -X POST ${ctx.env.factoryAppUrl}/api/github/clone-token \\
 
 git clone "$CLONE_URL" /tmp/build-work
 cd /tmp/build-work
+git config user.email "ajrrac@gmail.com"
+git config user.name "Abe Reyes"
 git remote set-url origin "$CLONE_URL"
 BRANCH_NAME="feature/issue-${issue.number}"
 git checkout -b "$BRANCH_NAME"
@@ -448,6 +450,8 @@ CLONE_URL=$(curl -s -X POST ${ctx.env.factoryAppUrl}/api/github/clone-token \\
 
 git clone "$CLONE_URL" /tmp/build-work
 cd /tmp/build-work
+git config user.email "ajrrac@gmail.com"
+git config user.name "Abe Reyes"
 git remote set-url origin "$CLONE_URL"
 git checkout -b ${branchName}
 \`\`\`
@@ -592,6 +596,8 @@ BUILD_REPO=$(echo $SETUP | jq -r .buildRepo)
 
 git clone "$BUILD_CLONE_URL" /tmp/build-work
 cd /tmp/build-work
+git config user.email "ajrrac@gmail.com"
+git config user.name "Abe Reyes"
 \`\`\`
 
 ### 3. Run the customize script with manifest values from the spec
