@@ -275,7 +275,7 @@ grep -rl "$(echo '${issue.title}' | tr ' ' '\\n' | grep -E '^[A-Z]' | head -3 | 
 - Follow the DESIGN.md spec if available
 - REUSE existing components where possible — check before creating new ones
 
-### 4b. TypeScript gate (HARD STOP)
+### 4b. TypeScript + production build gate (HARD STOP)
 \`\`\`bash
 npm install
 TSC_OUT=$(npx tsc --noEmit --skipLibCheck 2>&1)
@@ -286,6 +286,16 @@ if [ $TSC_EXIT -ne 0 ]; then
   exit 1
 fi
 echo "TypeScript check passed"
+
+# Production build check — catches SSR errors, missing env vars, invalid imports that TSC misses
+BUILD_OUT=$(npm run build 2>&1)
+BUILD_EXIT=$?
+echo "$BUILD_OUT" | tail -30
+if [ $BUILD_EXIT -ne 0 ]; then
+  echo "Production build FAILED — fix all build errors before deploying"
+  exit 1
+fi
+echo "Production build passed"
 \`\`\`
 
 ### 5. Update CLAUDE.md with changes (⛔ REQUIRED — pipeline will reject your PR without this)
@@ -655,11 +665,25 @@ if [ $TSC_EXIT -ne 0 ]; then
   exit 1
 fi
 echo "TypeScript check passed"
-# Update build monitor: TSC passed
+
+# Production build gate (HARD STOP — catches what TSC misses: missing env vars, SSR errors, next/image issues, etc.)
+echo "Running production build check..."
+BUILD_OUT=$(npm run build 2>&1)
+BUILD_EXIT=$?
+echo "$BUILD_OUT" | tail -30
+if [ $BUILD_EXIT -ne 0 ]; then
+  echo "Production build FAILED — fix all build errors before deploying to Vercel"
+  echo "Build output:"
+  echo "$BUILD_OUT" | tail -50
+  exit 1
+fi
+echo "Production build passed"
+
+# Update build monitor: TSC + build passed
 [ -n "$BUILD_MONITOR_ID" ] && curl -s -X PATCH "${ctx.env.factoryAppUrl}/api/threads/$SUBMISSION_ID/push" \\
   -H "Content-Type: application/json" \\
   -H "x-factory-secret: ${ctx.env.factorySecret}" \\
-  -d "{\"messageId\":\"$BUILD_MONITOR_ID\",\"payload\":{\"type\":\"build_monitor\",\"status\":\"building\",\"station\":\"build\",\"progress\":55,\"activities\":[{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Dependencies installed\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"success\",\"description\":\"TypeScript check passed\"}]}}" 2>/dev/null || true
+  -d "{\"messageId\":\"$BUILD_MONITOR_ID\",\"payload\":{\"type\":\"build_monitor\",\"status\":\"building\",\"station\":\"build\",\"progress\":55,\"activities\":[{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"info\",\"description\":\"Dependencies installed\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"success\",\"description\":\"TypeScript check passed\"},{\"ts\":\"$(date -u +%H:%M)\",\"event\":\"success\",\"description\":\"Production build passed\"}]}}" 2>/dev/null || true
 \`\`\`
 
 ### 8. Ensure code is in a GitHub repo (MANDATORY)
